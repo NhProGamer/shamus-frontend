@@ -216,11 +216,21 @@ const initializeGame = async () => {
 // Note: Le watcher sur wsMessages a été supprimé car on utilise onReceive maintenant.
 
 watch(connectionStatus, (status) => {
-  if (status === 'open') pushLocalMessage('SYSTÈME', 'Connexion rétablie !', 'village', true)
+  if (status === 'open') {
+    hideLoading()
+    pushLocalMessage('SYSTÈME', 'Connexion rétablie !', 'village', true)
+  }
+  if (status === 'closed') {
+    showLoading()
+    pushLocalMessage('SYSTÈME', 'Erreur connexion. Reconnexion...', 'village', true)
+  }
 })
 
 watch(wsError, (err) => {
-  if (err) pushLocalMessage('SYSTÈME', 'Erreur connexion. Reconnexion...', 'village', true)
+  if (err) {
+    showLoading()
+    pushLocalMessage('SYSTÈME', 'Erreur connexion. Reconnexion...', 'village', true)
+  }
 })
 
 watch(filteredMessages, async () => {
