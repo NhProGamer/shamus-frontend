@@ -38,11 +38,10 @@ const wsInstance = shallowRef<UseWebSocketReturn | null>(null)
 // --- PROXIES REACTIFS (Pour garder le template propre) ---
 // Ces computed permettent d'utiliser les variables dans le template même si wsInstance est null au début
 const connectionStatus = computed(() => wsInstance.value?.status.value ?? 'closed')
-const wsMessages = computed(() => wsInstance.value?.messages.value ?? [])
 const wsError = computed(() => wsInstance.value?.error.value ?? null)
 
 // Wrappers pour les fonctions
-const sendMsg = (data: any) => wsInstance.value?.sendMsg(data)
+const send = (data: any) => wsInstance.value?.send(data)
 const close = (code?: number, reason?: string) => wsInstance.value?.close(code, reason)
 const reconnect = async () => await wsInstance.value?.reconnect()
 
@@ -77,22 +76,7 @@ const filteredMessages = computed(() =>
 
 // --- LOGIQUE MÉTIER ---
 
-/** Gestion centralisée des messages entrants */
-const handleIncomingMessage = (message: WebSocketMessage) => {
-  let msg = message as BaseEvent
-  switch (msg.channel) {
-    case "game_event":
-      switch (msg.type) {
-        case "chat_message":
-          let data = msg.data as ChatMessageData
-          pushLocalMessage(data.playerID, data.message, data.channel, false)
-          break
-      }
-      break
-  }
-}
-
-/** Ajout d'un message à la liste locale avec timestamp */
+/** Gestion de l'ajout d'un message local */
 const pushLocalMessage = (pseudo: string, content: string, channel: ChatChannel, isSystem = false) => {
   messages.value.push({
     id: crypto.randomUUID(),
@@ -102,6 +86,46 @@ const pushLocalMessage = (pseudo: string, content: string, channel: ChatChannel,
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     isSystem
   })
+}
+
+/** Handler pour les messages de chat */
+const handleChatMessage = (data: ChatMessageData) => {
+  pushLocalMessage(data.playerID, data.message, data.channel, false)
+}
+
+/** Handler pour la mise à jour du cycle Jour/Nuit */
+const handleUpdateDayNight = (data: { phase?: 'day'|'night', nightNumber?: number }) => {
+  if (data.phase) gameState.value.currentPhase = data.phase
+  if (data.nightNumber) gameState.value.nightNumber = data.nightNumber
+}
+
+/** Handler pour la mise à jour de la composition (joueurs) */
+const handleUpdateComposition = (data: { players: any[] }) => {
+  if (data.players) {
+    gameState.value.players = data.players
+  }
+}
+
+/** Gestion centralisée des messages entrants (Dispatcher) */
+const handleIncomingMessage = (message: WebSocketMessage) => {
+  const msg = message as BaseEvent
+  // Mapping simple basé sur le channel et le type
+  // Vous pouvez étendre cette logique selon le protocole exact
+  if (msg.channel === "game_event") {
+    switch (msg.type) {
+      case "chat_message":
+        handleChatMessage(msg.data as ChatMessageData)
+        break
+      case "update_day": // Type hypothétique à adapter
+        handleUpdateDayNight(msg.data)
+        break
+      case "update_composition": // Type hypothétique à adapter
+        handleUpdateComposition(msg.data)
+        break
+      default:
+        console.log("Event non géré:", msg.type, msg.data)
+    }
+  }
 }
 
 /** Envoi du message au serveur */
@@ -132,7 +156,7 @@ const handleSendMessage = () => {
   }
 
   try {
-    sendMsg(JSON.stringify(event))
+    send(JSON.stringify(event))
   } catch (e) {
     console.error("Erreur envoi", e)
   }
@@ -163,17 +187,20 @@ const initializeGame = async () => {
     }
 
     const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080'
-    const finalUrl = `${baseUrl}/app/ws/${gameID}?access_token=${user.id_token}`
+    const finalUrl = `${baseUrl}/app/ws/${gameID}?access_token=${user.access_token}`
 
+    // Initialisation du WebSocket avec la nouvelle API
     wsInstance.value = useWebSocket(finalUrl, {
       autoReconnect: true,
       reconnectDelay: RECONNECT_DELAY,
-      maxReconnectAttempts: 10
+      maxReconnectAttempts: 10,
+      // On passe directement le handler ici
+      onReceive: handleIncomingMessage
     })
 
     await wsInstance.value.connect()
 
-    sendMsg({
+    send({
       type: 'JOIN_GAME',
       payload: { id: gameID, user: user.profile.name || 'Joueur' }
     })
@@ -186,17 +213,8 @@ const initializeGame = async () => {
   }
 }
 
-// Watchers sur les computed proxies
-watch(
-    wsMessages,
-    (newMessages) => {
-      if (newMessages.length > 0) {
-        const lastMsg = newMessages[newMessages.length - 1]
-        handleIncomingMessage(lastMsg)
-      }
-    },
-    { deep: true, flush: 'post' }
-)
+// Watchers
+// Note: Le watcher sur wsMessages a été supprimé car on utilise onReceive maintenant.
 
 watch(connectionStatus, (status) => {
   if (status === 'open') pushLocalMessage('SYSTÈME', 'Connexion rétablie !', 'village', true)

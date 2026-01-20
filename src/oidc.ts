@@ -6,6 +6,7 @@ const settings = {
     redirect_uri: `${window.location.origin}/oidc-callback`,
     response_type: 'code',
     scope: 'openid guilds identify email',
+    loadUserInfo: true,
     userStore: new WebStorageStateStore({ store: window.localStorage }),
 
     automaticSilentRenew: true,
@@ -14,7 +15,7 @@ const settings = {
         issuer: 'https://discord.com',
         authorization_endpoint: 'https://discord.com/api/oauth2/authorize',
         token_endpoint: 'https://discord.com/api/oauth2/token',
-        userinfo_endpoint: 'https://discord.com/api/users/@me',
+        userinfo_endpoint: 'https://discord.com/api/oauth2/userinfo',
         jwks_uri: 'https://discord.com/api/oauth2/keys'
     }
 };

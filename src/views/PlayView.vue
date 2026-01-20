@@ -25,7 +25,7 @@ const handleCreate = async () => {
     return
   }
 
-  const token = user.id_token
+  const token = user.access_token
 
   console.log("Token utilisé:", token)
 

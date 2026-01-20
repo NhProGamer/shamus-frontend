@@ -48,7 +48,9 @@ export type EventType =
     | 'role_reveal'
     | 'inactive'
     | 'chat_message'
-    | 'host_change';
+    | 'host_change'
+    | 'update_day'
+    | 'update_composition';
 
 export type EventChannel =
     | 'game_event'
