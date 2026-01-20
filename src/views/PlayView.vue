@@ -1,37 +1,50 @@
 <script setup lang="ts">
-import axios from 'axios';
-import { useOidcStore } from 'vue3-oidc';
-const { state } = useOidcStore()
-import { ref, unref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
+import { userManager } from '@/oidc'
 
 const router = useRouter()
 const gameCode = ref('')
 
-// Actions simulées
 const handleJoin = () => {
   if (gameCode.value.length < 3) return
   console.log('Rejoindre la partie:', gameCode.value)
   // router.push(`/lobby/${gameCode.value}`)
 }
 
-const handleCreate = () => {
+const handleCreate = async () => {
   console.log('Création de partie...')
-  const token = state.value.user?.id_token;
-  console.log(token);
-  const reponse = axios.post('http://localhost:8080/app/api/v1/game', null, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    }
-  });
-  reponse.then((res) => {
-    console.log(res.data.gameID)
-    router.push(`/game?gameID=${res.data.gameID}`)
-  })
 
+  const user = await userManager.getUser()
+
+  if (!user || user.expired) {
+    console.error("Utilisateur non authentifié ou session expirée")
+    // await userManager.signinRedirect()
+    userManager.startSilentRenew()
+    return
+  }
+
+  const token = user.id_token
+
+  console.log("Token utilisé:", token)
+
+  try {
+    const res = await axios.post('http://localhost:8080/app/api/v1/game', null, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    console.log("Game ID:", res.data.gameID)
+    router.push(`/game?gameID=${res.data.gameID}`)
+  } catch (error) {
+    console.error("Erreur lors de la création de la partie:", error)
+  }
 }
 </script>
+
 
 <template>
   <div class="shamus-wrapper flex min-h-screen w-full flex-col items-center justify-center p-4 font-['VT323']">

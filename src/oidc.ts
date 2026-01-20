@@ -1,39 +1,26 @@
-import type { VueOidcSettings } from 'vue3-oidc'
-import { createOidc, useOidcStore, useAuth } from 'vue3-oidc'
-import { unref } from 'vue'
+import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
 
-const origin = window.location.origin
-
-const { state } = useOidcStore()
-const { setRedirectUri } = useAuth()
-
-const oidcSettings: VueOidcSettings = {
-    authority: 'https://discord.com',      // Issuer
+const settings = {
+    authority: 'https://discord.com',
     client_id: '678251890081005588',
-    redirect_uri: origin + '/oidc-callback',
+    redirect_uri: `${window.location.origin}/oidc-callback`,
     response_type: 'code',
     scope: 'openid guilds identify email',
-    loadUserInfo: true,
-    onSigninRedirectCallback(user) {
-        console.log(user)
-        window.location.href = unref(state).redirect_uri || '/play'
-    },
-    onBeforeSigninRedirectCallback() {
-        setRedirectUri(location.pathname + location.search)
-    },
-}
+    userStore: new WebStorageStateStore({ store: window.localStorage }),
 
-createOidc({
-    oidcSettings,
-    auth: false,               // auto-auth si possible
-    events: {
-        addUserLoaded: (user) => {
-            console.log(user);
-        },
-        addUserSignedOut: () => {},
-    },
-    refreshToken: {           // refresh auto (optionnel)
-        enable: true,
-        time: 30000,
-    },
-})
+    automaticSilentRenew: true,
+    monitorSession: false,
+    metadata: {
+        issuer: 'https://discord.com',
+        authorization_endpoint: 'https://discord.com/api/oauth2/authorize',
+        token_endpoint: 'https://discord.com/api/oauth2/token',
+        userinfo_endpoint: 'https://discord.com/api/users/@me',
+        jwks_uri: 'https://discord.com/api/oauth2/keys'
+    }
+};
+
+export const userManager = new UserManager(settings);
+
+export const getUser = async (): Promise<User | null> => {
+    return await userManager.getUser();
+};

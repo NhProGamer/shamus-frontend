@@ -12,7 +12,7 @@ export type GamePhase = 'day' | 'night'
 
 // Interface pour les messages de chat
 export interface ChatMessage {
-  id: number
+  id: string
   pseudo: string
   content: string
   channel: ChatChannel

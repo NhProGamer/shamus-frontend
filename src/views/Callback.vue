@@ -1,28 +1,24 @@
-<script lang="ts" setup>
-import { computed, onMounted, unref } from "vue";
-import { useRouter } from "vue-router";
-import { useOidcStore } from "vue3-oidc";
+<template>
+  <div>Connexion en cours...</div>
+</template>
 
-const { state, actions } = useOidcStore();
-
-const userManager = computed(() => state.value.userManager);
+<script setup lang="ts">
+import { onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { userManager } from '@/oidc';
 
 const router = useRouter();
 
 onMounted(async () => {
-  let user = (await unref(state).userManager?.getUser()) || unref(state).user;
-  if (!user) {
-    user = (await userManager.value?.signinRedirectCallback()) || null;
+  try {
+    const user = await userManager.signinCallback();
+
+    const targetPath = (user.state as any)?.path || '/play';
+
+    router.push(targetPath);
+  } catch (err) {
+    console.error("Erreur de connexion OIDC:", err);
+    router.push('/');
   }
-  actions.value.setUser(user!);
-  router.push("/play");
 });
 </script>
-
-<template>
-  <div>
-    <h1>OIDC-CALLBACK</h1>
-  </div>
-</template>
-
-<style lang="less" scoped></style>

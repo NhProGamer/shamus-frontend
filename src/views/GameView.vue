@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, inject, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, inject, onUnmounted, watch, shallowRef } from 'vue'
 import { useRoute } from 'vue-router'
-import { useWebSocket, type WebSocketMessage, type WebSocketStatus } from "@/composables/useWebSocket"
-import { useOidcStore } from "vue3-oidc"
+import { useWebSocket, type WebSocketMessage, type WebSocketStatus, type UseWebSocketReturn } from "@/composables/useWebSocket"
+import { userManager } from '@/oidc'
 import {
   type MainTab,
   type ChatChannel,
@@ -24,34 +24,27 @@ const STATUS_LABELS: Record<WebSocketStatus, string> = {
   'error': 'Erreur'
 }
 
-// --- INJECTIONS & STORE ---
-const { state: oidcState } = useOidcStore()
+// --- INJECTIONS ---
 const route = useRoute()
 const showLoading = inject<() => void>('showLoading', () => {})
 const hideLoading = inject<() => void>('hideLoading', () => {})
 
-// --- CONFIGURATION WEBSOCKET ---
+// --- CONFIGURATION WEBSOCKET (Approche Impérative) ---
 const gameID = route.query.gameID as string
-const wsUrl = computed(() => {
-  if (!gameID || !oidcState.value.user?.id_token) return ''
-  // Utilisation d'une variable d'env pour l'URL (Best Practice Infra)
-  const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080'
-  return `${baseUrl}/app/ws/${gameID}?access_token=${oidcState.value.user.id_token}`
-})
 
-const {
-  status: connectionStatus,
-  messages: wsMessages,
-  error: wsError,
-  connect,
-  sendMsg,
-  close,
-  reconnect
-} = useWebSocket(wsUrl.value, {
-  autoReconnect: true,
-  reconnectDelay: RECONNECT_DELAY,
-  maxReconnectAttempts: 10
-})
+// On stocke l'instance du composable ici (shallowRef car l'objet retourné n'a pas besoin d'être deep reactive)
+const wsInstance = shallowRef<UseWebSocketReturn | null>(null)
+
+// --- PROXIES REACTIFS (Pour garder le template propre) ---
+// Ces computed permettent d'utiliser les variables dans le template même si wsInstance est null au début
+const connectionStatus = computed(() => wsInstance.value?.status.value ?? 'closed')
+const wsMessages = computed(() => wsInstance.value?.messages.value ?? [])
+const wsError = computed(() => wsInstance.value?.error.value ?? null)
+
+// Wrappers pour les fonctions
+const sendMsg = (data: any) => wsInstance.value?.sendMsg(data)
+const close = (code?: number, reason?: string) => wsInstance.value?.close(code, reason)
+const reconnect = async () => await wsInstance.value?.reconnect()
 
 // --- STATE: UI & OPTIONS ---
 const currentMainTab = ref<MainTab>('chat')
@@ -93,14 +86,16 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         case "chat_message":
           let data = msg.data as ChatMessageData
           pushLocalMessage(data.playerID, data.message, data.channel, false)
+          break
       }
+      break
   }
 }
 
 /** Ajout d'un message à la liste locale avec timestamp */
 const pushLocalMessage = (pseudo: string, content: string, channel: ChatChannel, isSystem = false) => {
   messages.value.push({
-    id: crypto.randomUUID(), // Plus robuste que Date.now + Math.random
+    id: crypto.randomUUID(),
     pseudo,
     content,
     channel,
@@ -124,23 +119,24 @@ const handleSendMessage = () => {
     return
   }
 
-  // Optimistic UI update
-  //pushLocalMessage('Moi', content, currentChatChannel.value)
   newMessage.value = ''
 
   const event: GameEvent = {
     channel: 'game_event',
     type: 'chat_message',
     data: {
-      playerID: "PseudoDebile",
+      playerID: "PseudoDebile", // À remplacer par le vrai pseudo du user OIDC si dispo
       message: content,
       channel: currentChatChannel.value,
     } as ChatMessageData
   }
 
-  sendMsg(JSON.stringify(event))
+  try {
+    sendMsg(JSON.stringify(event))
+  } catch (e) {
+    console.error("Erreur envoi", e)
+  }
 }
-
 
 const toggleStreamerMode = () => {
   streamerMode.value = !streamerMode.value
@@ -158,33 +154,49 @@ const initializeGame = async () => {
   }
 
   try {
-    await connect()
+    const user = await userManager.getUser()
+
+    if (!user || user.expired) {
+      console.warn("Utilisateur non authentifié, redirection...")
+      await userManager.signinRedirect({ state: { path: route.fullPath } })
+      return
+    }
+
+    const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080'
+    const finalUrl = `${baseUrl}/app/ws/${gameID}?access_token=${user.id_token}`
+
+    wsInstance.value = useWebSocket(finalUrl, {
+      autoReconnect: true,
+      reconnectDelay: RECONNECT_DELAY,
+      maxReconnectAttempts: 10
+    })
+
+    await wsInstance.value.connect()
+
     sendMsg({
       type: 'JOIN_GAME',
-      payload: { id: gameID, user: oidcState.value.user?.profile?.name || 'Joueur' }
+      payload: { id: gameID, user: user.profile.name || 'Joueur' }
     })
+
   } catch (err) {
-    console.error("Erreur WS:", err)
+    console.error("Erreur Init/WS:", err)
     pushLocalMessage('SYSTÈME', 'Échec connexion serveur.', 'village', true)
   } finally {
     hideLoading()
   }
 }
 
-// Watchers
-// Supposant wsMessages = ref<ChatMessage[]>([]) avec push/unshift des nouveaux
+// Watchers sur les computed proxies
 watch(
     wsMessages,
     (newMessages) => {
       if (newMessages.length > 0) {
-        const lastMsg = newMessages[newMessages.length - 1]  // Dernier ajouté (push)
-        // ou newMessages[0] si unshift
+        const lastMsg = newMessages[newMessages.length - 1]
         handleIncomingMessage(lastMsg)
       }
     },
-    { deep: true, flush: 'post' }  // 'post' après DOM update, évite multiples triggers
+    { deep: true, flush: 'post' }
 )
-
 
 watch(connectionStatus, (status) => {
   if (status === 'open') pushLocalMessage('SYSTÈME', 'Connexion rétablie !', 'village', true)
@@ -194,7 +206,6 @@ watch(wsError, (err) => {
   if (err) pushLocalMessage('SYSTÈME', 'Erreur connexion. Reconnexion...', 'village', true)
 })
 
-// Auto-scroll intelligent
 watch(filteredMessages, async () => {
   await nextTick()
   if (scrollContainer.value) {
@@ -203,7 +214,12 @@ watch(filteredMessages, async () => {
 }, { deep: true })
 
 onMounted(initializeGame)
-onUnmounted(() => close(1000, 'Unmounted'))
+
+onUnmounted(() => {
+  if (wsInstance.value) {
+    wsInstance.value.close(1000, 'Component Unmounted')
+  }
+})
 </script>
 
 <template>
@@ -362,8 +378,6 @@ onUnmounted(() => close(1000, 'Unmounted'))
 </template>
 
 <style scoped>
-/* Conserver les styles existants, ils sont corrects pour du pixel art */
-/* J'ai juste nettoyé les commentaires inutiles */
 .pixel-badge { border: 2px solid #08020d; box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
 .pixel-card {
   background-color: var(--color-night-light);

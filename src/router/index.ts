@@ -1,9 +1,11 @@
+// router/index.ts
 import { createRouter, createWebHistory } from 'vue-router'
+import { userManager } from '@/oidc' // Importez votre instance
+
 import HomeView from '@/views/HomeView.vue'
 import PlayView from "@/views/PlayView.vue";
 import Callback from "@/views/Callback.vue";
 import GameView from "@/views/GameView.vue";
-import {useAuth, useOidcStore} from 'vue3-oidc'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -35,28 +37,31 @@ const router = createRouter({
       name: 'account',
       component: HomeView,
     },
+    // La route de callback
     {
       path: "/oidc-callback",
-      component: Callback,
+      name: 'callback',
+      component: Callback, // Ce composant doit gérer le traitement du code
     },
   ],
 })
 
 router.beforeEach(async (to, from, next) => {
-  const { autoAuthenticate, signinRedirect} = useAuth() as any
-  const { state } = useOidcStore();
-  const requiresAuth = to.matched.some(r => r.meta.requiresAuth)
+  // Vérification si la route nécessite une auth
+  if (to.matched.some(r => r.meta.requiresAuth)) {
+    const user = await userManager.getUser();
 
-  if (!requiresAuth) return next()
-
-  await autoAuthenticate()
-
-  const isAuth = state.value?.user != null
-  if (!isAuth) {
-    await signinRedirect()
-  } else {
-    next()
+    // Si pas d'utilisateur ou token expiré
+    if (!user || user.expired) {
+      // Sauvegarde l'URL où l'utilisateur voulait aller
+      await userManager.signinRedirect({
+        state: { path: to.fullPath }
+      });
+      return; // On coupe l'exécution ici, la redirection va se faire
+    }
   }
+
+  next();
 })
 
 export default router
