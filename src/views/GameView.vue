@@ -3,7 +3,14 @@ import { ref, computed, nextTick, onMounted, inject, onUnmounted, watch } from '
 import { useRoute } from 'vue-router'
 import { useWebSocket, type WebSocketMessage, type WebSocketStatus } from "@/composables/useWebSocket"
 import { useOidcStore } from "vue3-oidc"
-import { type MainTab, type ChatChannel, type ChatMessage, type GameState } from "@/types/gameTypes"
+import {
+  type MainTab,
+  type ChatChannel,
+  type ChatMessage,
+  type GameState,
+  type ChatMessageData,
+  type GameEvent, type BaseEvent
+} from "@/types/gameTypes"
 import ErrorDisplay from "@/components/ErrorDisplay.vue"
 
 // --- CONSTANTES ---
@@ -79,40 +86,14 @@ const filteredMessages = computed(() =>
 
 /** Gestion centralisée des messages entrants */
 const handleIncomingMessage = (message: WebSocketMessage) => {
-  if (!message?.type) return
-
-  switch (message.type) {
-    case 'CHAT_MESSAGE':
-      if (message.payload?.sender && message.payload?.content) {
-        pushLocalMessage(
-            message.payload.sender,
-            message.payload.content,
-            message.payload.channel,
-            false
-        )
+  let msg = message as BaseEvent
+  switch (msg.channel) {
+    case "game_event":
+      switch (msg.type) {
+        case "chat_message":
+          let data = msg.data as ChatMessageData
+          pushLocalMessage(data.playerID, data.message, data.channel, false)
       }
-      break
-
-    case 'GAME_STATE_UPDATE':
-      if (message.payload?.players) {
-        gameState.value = message.payload
-      }
-      break
-
-    case 'SYSTEM_MESSAGE':
-      if (message.payload?.content) {
-        pushLocalMessage(
-            'SYSTÈME',
-            message.payload.content,
-            message.payload.channel || 'village',
-            true
-        )
-      }
-      break
-
-    case 'ERROR':
-      pushLocalMessage('SYSTÈME', `Erreur serveur: ${message.payload?.message}`, 'village', true)
-      break
   }
 }
 
@@ -144,14 +125,22 @@ const handleSendMessage = () => {
   }
 
   // Optimistic UI update
-  pushLocalMessage('Moi', content, currentChatChannel.value)
+  //pushLocalMessage('Moi', content, currentChatChannel.value)
   newMessage.value = ''
 
-  sendMsg({
-    type: 'CHAT_MESSAGE',
-    payload: { channel: currentChatChannel.value, content }
-  })
+  const event: GameEvent = {
+    channel: 'game_event',
+    type: 'chat_message',
+    data: {
+      playerID: "PseudoDebile",
+      message: content,
+      channel: currentChatChannel.value,
+    } as ChatMessageData
+  }
+
+  sendMsg(JSON.stringify(event))
 }
+
 
 const toggleStreamerMode = () => {
   streamerMode.value = !streamerMode.value
@@ -183,7 +172,19 @@ const initializeGame = async () => {
 }
 
 // Watchers
-watch(wsMessages, (msgs) => msgs.forEach(handleIncomingMessage), { deep: true })
+// Supposant wsMessages = ref<ChatMessage[]>([]) avec push/unshift des nouveaux
+watch(
+    wsMessages,
+    (newMessages) => {
+      if (newMessages.length > 0) {
+        const lastMsg = newMessages[newMessages.length - 1]  // Dernier ajouté (push)
+        // ou newMessages[0] si unshift
+        handleIncomingMessage(lastMsg)
+      }
+    },
+    { deep: true, flush: 'post' }  // 'post' après DOM update, évite multiples triggers
+)
+
 
 watch(connectionStatus, (status) => {
   if (status === 'open') pushLocalMessage('SYSTÈME', 'Connexion rétablie !', 'village', true)

@@ -17,19 +17,19 @@ const handleJoin = () => {
 
 const handleCreate = () => {
   console.log('Création de partie...')
-  /*const user = unref(state).user;
-  const token = user.id_token;
+  const token = state.value.user?.id_token;
   console.log(token);
-  const reponse = axios.post('http://localhost:8080/app/api/v1/game', "kk", {
+  const reponse = axios.post('http://localhost:8080/app/api/v1/game', null, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
   });
   reponse.then((res) => {
-    console.log(res)
+    console.log(res.data.gameID)
+    router.push(`/game?gameID=${res.data.gameID}`)
   })
-  // router.push('/lobby/new')*/
+
 }
 </script>
 

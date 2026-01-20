@@ -35,60 +35,65 @@ export interface GameState {
   players: Player[]
 }
 
-// Types pour les messages WebSocket spécifiques au jeu
-export interface GameWebSocketMessage {
-  type: string
-  payload?: any
-  [key: string]: any
+export type PlayerID = string;
+
+export type EventType =
+    | 'connexion'
+    | 'death'
+    | 'turn'
+    | 'deconnexion'
+    | 'reconnexion'
+    | 'night'
+    | 'day'
+    | 'role_reveal'
+    | 'inactive'
+    | 'chat_message'
+    | 'host_change';
+
+export type EventChannel =
+    | 'game_event'
+    | 'conn_event'
+    | 'settings_event'
+    | 'timer_event';
+
+export interface BaseEvent {
+    channel: EventChannel;
+    type: EventType;
+    data: any;
 }
 
-// Types spécifiques pour les différents types de messages
-export interface ChatMessagePayload {
-  sender: string
-  content: string
-  channel: ChatChannel
-  timestamp: string
+// Specific event data types
+export interface ConnexionEventData {
+    player: PlayerID;
 }
 
-export interface GameStateUpdatePayload extends GameState {}
-
-export interface SystemMessagePayload {
-  content: string
-  channel?: ChatChannel
+export interface DeathEventData {
+    killer?: PlayerID;
+    victim: PlayerID;
 }
 
-export interface JoinGamePayload {
-  id: string
-  user: string
+export interface ChatMessageData {
+    playerID: PlayerID;
+    message: string;
+    channel: ChatChannel;
 }
 
-// Type pour les messages de chat entrants
-export interface IncomingChatMessage {
-  type: 'CHAT_MESSAGE'
-  payload: ChatMessagePayload
+
+// Union of all possible events
+export type GameEvent =
+    | { channel: 'conn_event'; type: 'connexion'; data: ConnexionEventData }
+    | { channel: 'game_event'; type: 'death'; data: DeathEventData }
+    | { channel: 'game_event'; type: 'chat_message'; data: ChatMessageData }
+    | { channel: 'conn_event'; type: 'deconnexion'; data: { player: PlayerID } }  // Assumed similar to connexion
+    | { channel: 'game_event'; type: 'night'; data: {} }  // Placeholder
+    | { channel: 'game_event'; type: 'day'; data: {} }    // Placeholder
+    | { channel: 'game_event'; type: 'role_reveal'; data: { player: PlayerID } }  // Assumed
+    | { channel: 'game_event'; type: 'inactive'; data: { player: PlayerID } }     // Assumed
+    | { channel: 'game_event'; type: 'host_change'; data: { player: PlayerID } }; // Assumed
+
+// Utility to narrow event type
+export function isConnexionEvent(event: GameEvent): event is Extract<GameEvent, {type: 'connexion'}> {
+    return event.type === 'connexion';
 }
 
-// Type pour les mises à jour d'état de jeu
-export interface GameStateUpdateMessage {
-  type: 'GAME_STATE_UPDATE'
-  payload: GameStateUpdatePayload
-}
-
-// Type pour les messages système
-export interface SystemMessage {
-  type: 'SYSTEM_MESSAGE'
-  payload: SystemMessagePayload
-}
-
-// Type pour les messages de connexion
-export interface JoinGameMessage {
-  type: 'JOIN_GAME'
-  payload: JoinGamePayload
-}
-
-// Union type pour tous les types de messages possibles
-export type GameMessage = 
-  | IncomingChatMessage 
-  | GameStateUpdateMessage 
-  | SystemMessage 
-  | JoinGameMessage
+// Add similar type guards for other events as needed
