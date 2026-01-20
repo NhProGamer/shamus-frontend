@@ -76,6 +76,7 @@ export interface DeathEventData {
 
 export interface ChatMessageData {
     playerID: PlayerID;
+    nickname: string;
     message: string;
     channel: ChatChannel;
 }

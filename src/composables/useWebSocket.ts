@@ -1,4 +1,4 @@
-import { ref, onUnmounted, type Ref } from 'vue'
+import { ref, onUnmounted, type Ref, shallowRef } from 'vue'
 
 /**
  * Interface pour les messages WebSocket génériques
@@ -19,14 +19,13 @@ export type WebSocketStatus = 'connecting' | 'open' | 'closing' | 'closed' | 'er
  * Interface de retour du composable useWebSocket
  */
 export interface UseWebSocketReturn {
-    socket: Ref<WebSocket | null>
     status: Ref<WebSocketStatus>
-    messages: Ref<WebSocketMessage[]>
+    data: Ref<WebSocketMessage | null>
     error: Ref<Event | null>
-    connect: () => Promise<WebSocket>
-    sendMsg: <T>(data: WebSocketMessage<T> | string) => void
+    connect: () => Promise<void>
+    send: <T>(data: WebSocketMessage<T> | string) => void
     close: (code?: number, reason?: string) => void
-    reconnect: () => Promise<WebSocket>
+    reconnect: () => Promise<void>
 }
 
 /**
@@ -37,6 +36,10 @@ export interface WebSocketOptions {
     reconnectDelay?: number
     maxReconnectAttempts?: number
     protocols?: string | string[]
+    onReceive?: (data: WebSocketMessage) => void
+    onConnected?: (ws: WebSocket) => void
+    onDisconnected?: (event: CloseEvent) => void
+    onError?: (event: Event) => void
 }
 
 /**
@@ -47,9 +50,9 @@ export interface WebSocketOptions {
  */
 export function useWebSocket(url: string, options: WebSocketOptions = {}): UseWebSocketReturn {
     // États réactifs avec typage explicite
-    const socket = ref<WebSocket | null>(null)
+    const socket = shallowRef<WebSocket | null>(null)
     const status = ref<WebSocketStatus>('closed')
-    const messages = ref<WebSocketMessage[]>([])
+    const data = shallowRef<WebSocketMessage | null>(null)
     const error = ref<Event | null>(null)
     
     // Configuration par défaut
@@ -79,9 +82,7 @@ export function useWebSocket(url: string, options: WebSocketOptions = {}): UseWe
      * Planifie une reconnexion automatique
      */
     const scheduleReconnect = () => {
-        if (reconnectTimer) {
-            clearTimeout(reconnectTimer)
-        }
+        if (reconnectTimer) return
         
         reconnectTimer = window.setTimeout(() => {
             console.log(`[WebSocket] Tentative de reconnexion (${reconnectAttempts + 1}/${config.maxReconnectAttempts || '∞'})`)
@@ -91,93 +92,104 @@ export function useWebSocket(url: string, options: WebSocketOptions = {}): UseWe
 
     /**
      * Initialise la connexion WebSocket.
-     * Retourne une Promesse qui se résout quand la connexion est ouverte.
      */
-    const connect = (): Promise<WebSocket> => {
-        return new Promise((resolve, reject) => {
-            reconnectAttempts = 0
-            if (socket.value) {
-                close(1000, 'Reconnecting')
+    const connect = (): Promise<void> => {
+        return new Promise((resolve) => {
+            // Si déjà connecté ou en cours, on ne fait rien (ou on pourrait forcer la fermeture avant)
+            if (socket.value && (socket.value.readyState === WebSocket.OPEN || socket.value.readyState === WebSocket.CONNECTING)) {
+                resolve()
+                return
+            }
+
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer)
+                reconnectTimer = null
             }
 
             try {
                 updateStatus('connecting')
                 const ws = new WebSocket(url, config.protocols)
                 socket.value = ws
+
                 ws.onopen = () => {
                     console.log(`[WebSocket] Connecté à ${url}`)
                     updateStatus('open')
                     error.value = null
                     reconnectAttempts = 0
-                    resolve(ws)
+                    config.onConnected?.(ws)
+                    resolve()
                 }
+
                 ws.onmessage = (event: MessageEvent) => {
                     handleMessage(event.data)
                 }
+
                 ws.onerror = (e: Event) => {
                     console.error('[WebSocket] Erreur:', e)
                     error.value = e
-                    updateStatus('error')
-                    reject(e)
+                    config.onError?.(e)
+                    // Note: onerror est souvent suivi de onclose
                 }
+
                 ws.onclose = (event) => {
-                    console.log(`[WebSocket] Déconnecté (code: ${event.code}, raison: ${event.reason || 'unknown'})`)
+                    console.log(`[WebSocket] Déconnecté (code: ${event.code})`)
+                    config.onDisconnected?.(event)
                     updateStatus('closed')
+                    socket.value = null
                 }
 
             } catch (e) {
-                console.error('[WebSocket] Exception lors de la connexion:', e)
-                error.value = new CustomEvent('WebSocketException', { detail: e })
+                console.error('[WebSocket] Exception exécution:', e)
                 updateStatus('error')
-                reject(e)
+                // On laisse le mécanisme de retry gérer ça via updateStatus('error')
             }
         })
     }
 
     /**
-     * Tentative de reconnexion
+     * Tentative de reconnexion manuelle ou automatique
      */
-    const reconnect = (): Promise<WebSocket> => {
+    const reconnect = async (): Promise<void> => {
+        close(1000, 'Reconnecting')
         reconnectAttempts++
-        return connect()
+        await connect()
     }
 
     /**
      * Traite le message entrant (tente de parser du JSON)
      */
-    const handleMessage = (data: string) => {
+    const handleMessage = (rawData: string) => {
         try {
-            const parsed: WebSocketMessage = JSON.parse(data)
-            messages.value.push(parsed)
-        } catch (e) {messages.value.push({ type: 'text', payload: data })
+            const parsed: WebSocketMessage = JSON.parse(rawData)
+            data.value = parsed
+            config.onReceive?.(parsed)
+        } catch (e) {
+            // Si ce n'est pas du JSON, on l'emballe dans un format générique si besoin,
+            // ou on ignore / log. Ici on supporte le texte brut.
+            const textMsg = { type: 'text', payload: rawData }
+            data.value = textMsg
+            config.onReceive?.(textMsg)
         }
     }
 
     /**
      * Envoie un message au serveur.
-     * Gère automatiquement la conversion en JSON si c'est un objet.
-     * @throws Error si le socket n'est pas connecté
      */
-    const sendMsg = <T>(data: WebSocketMessage<T> | string) => {
+    const send = <T>(content: WebSocketMessage<T> | string) => {
         if (!socket.value || socket.value.readyState !== WebSocket.OPEN) {
-            const errorMsg = '[WebSocket] Impossible d\'envoyer : non connecté.'
-            console.warn(errorMsg)
-            throw new Error(errorMsg)
+            console.warn('[WebSocket] Envoi impossible : non connecté.')
+            return
         }
-
         try {
-            const payload = typeof data === 'object' ? JSON.stringify(data) : data
+            const payload = typeof content === 'object' ? JSON.stringify(content) : content
             socket.value.send(payload)
         } catch (e) {
-            console.error('[WebSocket] Erreur lors de l\'envoi:', e)
-            throw e
+            console.error('[WebSocket] Erreur envoi:', e)
         }
     }
 
     /**
      * Ferme manuellement la connexion
-     * @param code - Code de fermeture (par défaut: 1000 - fermeture normale)
-     * @param reason - Raison de la fermeture
      */
     const close = (code: number = 1000, reason: string = 'Normal closure') => {
         if (reconnectTimer) {
@@ -186,6 +198,8 @@ export function useWebSocket(url: string, options: WebSocketOptions = {}): UseWe
         }
         
         if (socket.value) {
+            // Éviter de déclencher onclose en boucle si on ferme manuellement ? 
+            // Généralement on veut que onclose soit appelé pour mettre à jour le state.
             socket.value.close(code, reason)
         }
     }
@@ -196,12 +210,11 @@ export function useWebSocket(url: string, options: WebSocketOptions = {}): UseWe
     })
 
     return {
-        socket,
         status,
-        messages,
+        data,
         error,
         connect,
-        sendMsg,
+        send,
         close,
         reconnect
     }

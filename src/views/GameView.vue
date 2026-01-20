@@ -90,7 +90,7 @@ const pushLocalMessage = (pseudo: string, content: string, channel: ChatChannel,
 
 /** Handler pour les messages de chat */
 const handleChatMessage = (data: ChatMessageData) => {
-  pushLocalMessage(data.playerID, data.message, data.channel, false)
+  pushLocalMessage(data.nickname, data.message, data.channel, false)
 }
 
 /** Handler pour la mise à jour du cycle Jour/Nuit */
@@ -149,7 +149,6 @@ const handleSendMessage = () => {
     channel: 'game_event',
     type: 'chat_message',
     data: {
-      playerID: "PseudoDebile", // À remplacer par le vrai pseudo du user OIDC si dispo
       message: content,
       channel: currentChatChannel.value,
     } as ChatMessageData
