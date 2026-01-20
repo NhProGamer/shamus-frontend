@@ -1,0 +1,1 @@
+export type RoleType = 'villager' | 'werewolf' | 'seer' | 'witch'

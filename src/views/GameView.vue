@@ -6,12 +6,16 @@ import { userManager } from '@/oidc'
 import {
   type MainTab,
   type ChatChannel,
-  type ChatMessage,
-  type GameState,
-  type ChatMessageData,
-  type GameEvent, type BaseEvent
-} from "@/types/gameTypes"
+} from "@/types/ui.ts"
 import ErrorDisplay from "@/components/ErrorDisplay.vue"
+import {
+  type GameDataEventData,
+  type ChatMessageEvent,
+  type Event,
+  EventChannelGameEvent,
+  EventTypeChatMessage,
+  EventTypeGameData,
+} from "@/types/events.ts";
 
 // --- CONSTANTES ---
 const MAX_MSG_LENGTH = 500
@@ -50,24 +54,32 @@ const currentMainTab = ref<MainTab>('chat')
 const streamerMode = ref(false)
 
 // --- STATE: JEU & JOUEURS ---
-const gameState = ref<GameState>({
-  currentPhase: 'night',
-  nightNumber: 1,
-  players: []
+// Utilisation de GameDataEventData pour stocker l'état complet du jeu
+const actualGame = ref<GameDataEventData | null>(null)
+
+const livingPlayers = computed(() => actualGame.value?.players.filter(p => p.alive) ?? [])
+const deadPlayers = computed(() => actualGame.value?.players.filter(p => !p.alive) ?? [])
+
+const currentPhaseText = computed(() => {
+  if (!actualGame.value) return 'CHARGEMENT...'
+  return actualGame.value.phase === 'day'
+      ? `JOUR ${actualGame.value.day}`
+      : `NUIT ${actualGame.value.day}`
 })
 
-const livingPlayers = computed(() => gameState.value.players.filter(p => p.isAlive))
-const deadPlayers = computed(() => gameState.value.players.filter(p => !p.isAlive))
-const currentPhaseText = computed(() =>
-    gameState.value.currentPhase === 'day'
-        ? `JOUR ${gameState.value.nightNumber}`
-        : `NUIT ${gameState.value.nightNumber}`
-)
-
+// --- STATE: CHAT ---
 // --- STATE: CHAT ---
 const currentChatChannel = ref<ChatChannel>('village')
 const newMessage = ref('')
-const messages = ref<ChatMessage[]>([])
+
+// Extension locale pour l'affichage (ajout ID, timestamp, isSystem)
+type UIMessage = ChatMessageEvent & {
+  id: string
+  isSystem: boolean
+  timestamp: string
+}
+
+const messages = ref<UIMessage[]>([])
 const scrollContainer = ref<HTMLDivElement | null>(null)
 
 const filteredMessages = computed(() =>
@@ -77,54 +89,57 @@ const filteredMessages = computed(() =>
 // --- LOGIQUE MÉTIER ---
 
 /** Gestion de l'ajout d'un message local */
-const pushLocalMessage = (pseudo: string, content: string, channel: ChatChannel, isSystem = false) => {
+const pushLocalMessage = (playerID: string, messageContent: string, channel: string, nickname: string = 'Inconnu', isSystem = false) => {
   messages.value.push({
     id: crypto.randomUUID(),
-    pseudo,
-    content,
+    playerID,
+    nickname,
+    message: messageContent,
     channel,
-    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    isSystem
+    isSystem,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   })
 }
 
 /** Handler pour les messages de chat */
-const handleChatMessage = (data: ChatMessageData) => {
-  pushLocalMessage(data.nickname, data.message, data.channel, false)
+const handleChatMessage = (data: ChatMessageEvent) => {
+  messages.value.push({
+    ...data,
+    id: crypto.randomUUID(),
+    isSystem: false,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  })
 }
 
-/** Handler pour la mise à jour du cycle Jour/Nuit */
-const handleUpdateDayNight = (data: { phase?: 'day'|'night', nightNumber?: number }) => {
-  if (data.phase) gameState.value.currentPhase = data.phase
-  if (data.nightNumber) gameState.value.nightNumber = data.nightNumber
-}
-
-/** Handler pour la mise à jour de la composition (joueurs) */
-const handleUpdateComposition = (data: { players: any[] }) => {
-  if (data.players) {
-    gameState.value.players = data.players
-  }
+/** Handler pour la mise à jour des données de jeu (remplace updateDay et updateComposition) */
+const handleGameData = (data: GameDataEventData) => {
+  console.log(data)
+  actualGame.value = data
 }
 
 /** Gestion centralisée des messages entrants (Dispatcher) */
 const handleIncomingMessage = (message: WebSocketMessage) => {
-  const msg = message as BaseEvent
-  // Mapping simple basé sur le channel et le type
-  // Vous pouvez étendre cette logique selon le protocole exact
-  if (msg.channel === "game_event") {
-    switch (msg.type) {
-      case "chat_message":
-        handleChatMessage(msg.data as ChatMessageData)
+  // Casting vers l'interface Event générique
+  const event = message as Event<any>
+
+  // Vérification basique
+  if (!event || !event.type) return
+
+  // Logique de dispatch selon le channel et le type
+  if (event.channel === EventChannelGameEvent) {
+    switch (event.type) {
+      case EventTypeChatMessage:
+        handleChatMessage(event.data as ChatMessageEvent)
         break
-      case "update_day": // Type hypothétique à adapter
-        handleUpdateDayNight(msg.data)
-        break
-      case "update_composition": // Type hypothétique à adapter
-        handleUpdateComposition(msg.data)
+      case EventTypeGameData:
+        handleGameData(event.data as GameDataEventData)
         break
       default:
-        console.log("Event non géré:", msg.type, msg.data)
+        console.log("Event Game non géré:", event.type, event.data)
     }
+  } else {
+    // Autres channels si nécessaire
+    console.log("Channel non géré:", event.channel, event.data)
   }
 }
 
@@ -134,24 +149,33 @@ const handleSendMessage = () => {
   if (!content) return
 
   if (connectionStatus.value !== 'open') {
-    pushLocalMessage('SYSTÈME', 'Erreur: Non connecté au serveur.', currentChatChannel.value, true)
+    pushLocalMessage('system', 'Erreur: Non connecté au serveur.', currentChatChannel.value, 'SYSTÈME', true)
     return
   }
 
   if (content.length > MAX_MSG_LENGTH) {
-    pushLocalMessage('SYSTÈME', `Message trop long (max ${MAX_MSG_LENGTH}).`, currentChatChannel.value, true)
+    pushLocalMessage('system', `Message trop long (max ${MAX_MSG_LENGTH}).`, currentChatChannel.value, 'SYSTÈME', true)
     return
   }
 
   newMessage.value = ''
 
-  const event: GameEvent = {
-    channel: 'game_event',
-    type: 'chat_message',
-    data: {
-      message: content,
-      channel: currentChatChannel.value,
-    } as ChatMessageData
+  // Construction de l'événement à envoyer
+  // Note: Le serveur attend probablement un Event<ChatMessageEvent>
+  // Mais l'interface d'envoi peut différer de celle de réception (pas d'ID joueur par ex).
+  // On assume ici que le serveur complète les infos manquantes (playerID, nickname).
+
+  const chatData: ChatMessageEvent = {
+    playerID: '',
+    message: content,
+    channel: currentChatChannel.value,
+    nickname: ''
+  }
+
+  const event: Event<ChatMessageEvent> = {
+    channel: EventChannelGameEvent,
+    type: EventTypeChatMessage,
+    data: chatData
   }
 
   try {
@@ -163,7 +187,7 @@ const handleSendMessage = () => {
 
 const toggleStreamerMode = () => {
   streamerMode.value = !streamerMode.value
-  pushLocalMessage('SYSTÈME', `Mode Streamer ${streamerMode.value ? 'activé' : 'désactivé'}.`, 'village', true)
+  pushLocalMessage('system', `Mode Streamer ${streamerMode.value ? 'activé' : 'désactivé'}.`, 'village', 'SYSTÈME', true)
 }
 
 // --- INITIALISATION & LIFECYCLE ---
@@ -199,14 +223,9 @@ const initializeGame = async () => {
 
     await wsInstance.value.connect()
 
-    send({
-      type: 'JOIN_GAME',
-      payload: { id: gameID, user: user.profile.name || 'Joueur' }
-    })
-
   } catch (err) {
     console.error("Erreur Init/WS:", err)
-    pushLocalMessage('SYSTÈME', 'Échec connexion serveur.', 'village', true)
+    pushLocalMessage('system', 'Échec connexion serveur.', 'village', 'SYSTÈME', true)
   } finally {
     hideLoading()
   }
@@ -218,18 +237,18 @@ const initializeGame = async () => {
 watch(connectionStatus, (status) => {
   if (status === 'open') {
     hideLoading()
-    pushLocalMessage('SYSTÈME', 'Connexion rétablie !', 'village', true)
+    pushLocalMessage('system', 'Connexion rétablie !', 'village', 'SYSTÈME', true)
   }
   if (status === 'closed') {
     showLoading()
-    pushLocalMessage('SYSTÈME', 'Erreur connexion. Reconnexion...', 'village', true)
+    pushLocalMessage('system', 'Erreur connexion. Reconnexion...', 'village', 'SYSTÈME', true)
   }
 })
 
 watch(wsError, (err) => {
   if (err) {
     showLoading()
-    pushLocalMessage('SYSTÈME', 'Erreur connexion. Reconnexion...', 'village', true)
+    pushLocalMessage('system', 'Erreur connexion. Reconnexion...', 'village', 'SYSTÈME', true)
   }
 })
 
@@ -325,7 +344,7 @@ onUnmounted(() => {
 
             <div v-for="msg in filteredMessages" :key="msg.id" class="animate-fade-in" :class="{'text-center my-2': msg.isSystem}">
               <span v-if="msg.isSystem" class="text-yellow-500 text-lg bg-yellow-900/10 px-4 py-1 border-y border-yellow-900/50">
-                &lt; {{ msg.content }} &gt;
+                &lt; {{ msg.message }} &gt;
               </span>
               <div v-else class="flex gap-2 items-baseline text-left">
                 <span class="text-gray-500 text-base">[{{ msg.timestamp }}]</span>
@@ -333,8 +352,8 @@ onUnmounted(() => {
                   'text-blue-400': msg.channel === 'village',
                   'text-red-500': msg.channel === 'loups',
                   'text-pink-400': msg.channel === 'amoureux'
-                }">{{ msg.pseudo }}:</span>
-                <span class="text-xl text-gray-200 break-words">{{ msg.content }}</span>
+                }">{{ msg.nickname }}:</span>
+                <span class="text-xl text-gray-200 break-words">{{ msg.message }}</span>
               </div>
             </div>
           </div>
@@ -366,7 +385,7 @@ onUnmounted(() => {
           </h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div v-for="player in livingPlayers" :key="player.id" class="bg-[#1e1b29] p-3 border-2 border-[#584c75] flex justify-between items-center">
-              <span class="text-xl text-white">{{ player.name }}</span>
+              <span class="text-xl text-white">{{ player.id }}</span>
               <span class="text-green-500">Vivant</span>
             </div>
           </div>
@@ -377,7 +396,7 @@ onUnmounted(() => {
           </h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div v-for="player in deadPlayers" :key="player.id" class="bg-[#150a1a] p-3 border-2 border-[#2a1d3a] flex justify-between items-center opacity-60">
-              <span class="text-gray-400 line-through">{{ player.name }}</span>
+              <span class="text-gray-400 line-through">{{ player.id }}</span>
               <span class="text-red-700">Mort</span>
             </div>
           </div>
