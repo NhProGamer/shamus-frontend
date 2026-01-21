@@ -92,6 +92,10 @@ const totalRoles = computed(() => {
   return Object.values(actualGame.value.settings.roles).reduce((sum, count) => sum + count, 0)
 })
 
+const playerCount = computed(() => actualGame.value?.players?.length ?? 0)
+
+const rolesMatchPlayers = computed(() => totalRoles.value === playerCount.value)
+
 const rolesList = computed(() => {
   if (!actualGame.value?.settings?.roles) return []
   return Object.entries(actualGame.value.settings.roles).map(([role, count]) => ({
@@ -513,9 +517,18 @@ onUnmounted(() => {
           <div class="space-y-4">
             <div class="flex items-center justify-between border-b border-purple-900 pb-2">
               <h2 class="text-2xl text-purple-300">Composition des rôles</h2>
-              <span class="text-lg text-gray-400">
-                Total: <span class="text-white font-bold">{{ totalRoles }}</span> rôles
-              </span>
+              <div class="flex items-center gap-2">
+                <span 
+                  class="text-lg px-2 py-0.5 border"
+                  :class="rolesMatchPlayers 
+                    ? 'text-green-400 border-green-700 bg-green-900/20' 
+                    : 'text-yellow-400 border-yellow-700 bg-yellow-900/20'"
+                >
+                  {{ playerCount }} joueurs
+                </span>
+                <span class="text-gray-500">/</span>
+                <span class="text-lg text-white font-bold">{{ totalRoles }} rôles</span>
+              </div>
             </div>
 
             <!-- Badge Host -->
