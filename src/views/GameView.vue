@@ -74,6 +74,7 @@ let settingsErrorTimeout: ReturnType<typeof setTimeout> | null = null
 
 // --- STATE: DEBOUNCE SETTINGS ---
 const pendingRoles = ref<Record<RoleType, number> | null>(null)
+const lastConfirmedRoles = ref<Record<RoleType, number> | null>(null)
 let settingsDebounceTimeout: ReturnType<typeof setTimeout> | null = null
 const SETTINGS_DEBOUNCE_DELAY = 300 // ms
 
@@ -166,6 +167,10 @@ const handleChatMessage = (data: ChatMessageEvent) => {
 /** Handler pour la mise à jour des données de jeu (remplace updateDay et updateComposition) */
 const handleGameData = (data: GameDataEventData) => {
   actualGame.value = data
+  // Sauvegarder l'état initial des roles pour rollback éventuel
+  if (data.settings?.roles) {
+    lastConfirmedRoles.value = { ...data.settings.roles }
+  }
 }
 
 /** Handler pour la mise à jour des paramètres de jeu */
@@ -175,6 +180,9 @@ const handleSettingsUpdate = (data: GameSettingsEventData) => {
       ...actualGame.value,
       settings: { roles: data.roles }
     }
+    // Sauvegarder l'état confirmé par le serveur pour rollback éventuel
+    lastConfirmedRoles.value = { ...data.roles }
+    pendingRoles.value = null
   }
 }
 
@@ -224,9 +232,25 @@ const updateRoleCount = (roleType: RoleType, delta: number) => {
   settingsDebounceTimeout = setTimeout(sendPendingSettings, SETTINGS_DEBOUNCE_DELAY)
 }
 
-/** Affiche une erreur temporaire dans l'UI */
+/** Affiche une erreur temporaire dans l'UI et rollback les modifications */
 const showSettingsError = (message: string) => {
   settingsError.value = message
+  
+  // Annuler tout envoi en attente
+  if (settingsDebounceTimeout) {
+    clearTimeout(settingsDebounceTimeout)
+    settingsDebounceTimeout = null
+  }
+  pendingRoles.value = null
+  
+  // Rollback vers le dernier état confirmé par le serveur
+  if (lastConfirmedRoles.value && actualGame.value) {
+    actualGame.value = {
+      ...actualGame.value,
+      settings: { roles: { ...lastConfirmedRoles.value } }
+    }
+  }
+  
   if (settingsErrorTimeout) clearTimeout(settingsErrorTimeout)
   settingsErrorTimeout = setTimeout(() => {
     settingsError.value = null
