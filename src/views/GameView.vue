@@ -68,6 +68,10 @@ const streamerMode = ref(false)
 // --- STATE: UTILISATEUR ---
 const currentUserId = ref<string | null>(null)
 
+// --- STATE: ERREURS ---
+const settingsError = ref<string | null>(null)
+let settingsErrorTimeout: ReturnType<typeof setTimeout> | null = null
+
 // --- STATE: JEU & JOUEURS ---
 // Utilisation de GameDataEventData pour stocker l'état complet du jeu
 const actualGame = ref<GameDataEventData | null>(null)
@@ -191,8 +195,23 @@ const updateRoleCount = (roleType: RoleType, delta: number) => {
   }
 }
 
+/** Affiche une erreur temporaire dans l'UI */
+const showSettingsError = (message: string) => {
+  settingsError.value = message
+  if (settingsErrorTimeout) clearTimeout(settingsErrorTimeout)
+  settingsErrorTimeout = setTimeout(() => {
+    settingsError.value = null
+  }, 5000)
+}
+
 /** Gestion centralisée des messages entrants (Dispatcher) */
 const handleIncomingMessage = (message: WebSocketMessage) => {
+  // Gestion des messages d'erreur texte brut du serveur
+  if (message.type === 'text' && message.payload) {
+    showSettingsError(message.payload as string)
+    return
+  }
+
   // Casting vers l'interface Event générique
   const event = message as Event<any>
 
@@ -503,6 +522,15 @@ onUnmounted(() => {
             <div v-if="isHost" class="inline-flex items-center gap-2 px-3 py-1 bg-yellow-900/30 border border-yellow-700 text-yellow-400 text-sm">
               <span>★</span> Vous êtes l'hôte
               <span v-if="!isWaiting" class="text-yellow-600">(modifications désactivées)</span>
+            </div>
+
+            <!-- Message d'erreur serveur -->
+            <div 
+              v-if="settingsError" 
+              class="flex items-center gap-2 px-3 py-2 bg-red-900/40 border border-red-700 text-red-300 text-sm animate-fade-in"
+            >
+              <span>⚠</span>
+              <span>{{ settingsError }}</span>
             </div>
 
             <!-- Liste des rôles -->
