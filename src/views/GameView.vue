@@ -7,6 +7,7 @@ import {
   type MainTab,
   type ChatChannel,
 } from "@/types/ui.ts"
+import type { RoleType } from "@/types/roles.ts"
 import ErrorDisplay from "@/components/ErrorDisplay.vue"
 import {
   type GameDataEventData,
@@ -29,6 +30,14 @@ const STATUS_LABELS: Record<WebSocketStatus, string> = {
   'closing': 'Déconnexion...',
   'closed': 'Déconnecté',
   'error': 'Erreur'
+}
+
+// Configuration des rôles (extensible)
+const ROLE_CONFIG: Record<RoleType, { name: string; color: string; maxCount?: number }> = {
+  villager: { name: 'Villageois', color: 'text-blue-400' },
+  werewolf: { name: 'Loup-Garou', color: 'text-red-500' },
+  seer: { name: 'Voyante', color: 'text-purple-400', maxCount: 1 },
+  witch: { name: 'Sorcière', color: 'text-green-400', maxCount: 1 }
 }
 
 // --- INJECTIONS ---
@@ -67,6 +76,25 @@ const actualGame = ref<GameDataEventData | null>(null)
 const isHost = computed(() => {
   if (!actualGame.value || !currentUserId.value) return false
   return actualGame.value.host === currentUserId.value
+})
+
+// --- COMPUTED: GAME STATUS ---
+const isWaiting = computed(() => actualGame.value?.status === 'waiting')
+const canEditSettings = computed(() => isHost.value && isWaiting.value)
+
+// --- COMPUTED: ROLES ---
+const totalRoles = computed(() => {
+  if (!actualGame.value?.settings?.roles) return 0
+  return Object.values(actualGame.value.settings.roles).reduce((sum, count) => sum + count, 0)
+})
+
+const rolesList = computed(() => {
+  if (!actualGame.value?.settings?.roles) return []
+  return Object.entries(actualGame.value.settings.roles).map(([role, count]) => ({
+    type: role as RoleType,
+    count: count as number,
+    config: ROLE_CONFIG[role as RoleType] || { name: role, color: 'text-gray-400' }
+  }))
 })
 
 const livingPlayers = computed(() => actualGame.value?.players.filter(p => p.alive) ?? [])
@@ -137,6 +165,33 @@ const handleSettingsUpdate = (data: GameSettingsEventData) => {
       ...actualGame.value,
       settings: { roles: data.roles }
     }
+  }
+}
+
+/** Envoie une modification de rôle au serveur via WebSocket */
+const updateRoleCount = (roleType: RoleType, delta: number) => {
+  if (!actualGame.value?.settings?.roles || !canEditSettings.value) return
+
+  const currentRoles = { ...actualGame.value.settings.roles }
+  const currentCount = currentRoles[roleType] || 0
+  const newCount = Math.max(0, currentCount + delta)
+
+  // Mise à jour optimiste locale (sera écrasée par la réponse serveur)
+  currentRoles[roleType] = newCount
+
+  // Construction de l'événement à envoyer
+  const event: Event<GameSettingsEventData> = {
+    channel: EventChannelSettings,
+    type: EventTypeGameSettings,
+    data: { roles: currentRoles }
+  }
+
+  try {
+    send(JSON.stringify(event))
+    console.log('Settings update sent:', currentRoles)
+  } catch (e) {
+    console.error('Erreur envoi settings:', e)
+    pushLocalMessage('system', 'Erreur lors de la mise à jour des paramètres.', 'village', 'SYSTÈME', true)
   }
 }
 
@@ -437,7 +492,70 @@ onUnmounted(() => {
         </div>
 
         <!-- TAB: PARAMÈTRES -->
-        <div v-else-if="currentMainTab === 'settings'" class="h-full flex flex-col gap-6 p-4">
+        <div v-else-if="currentMainTab === 'settings'" class="h-full flex flex-col gap-6 p-4 overflow-y-auto">
+          
+          <!-- Section: Composition des rôles -->
+          <div class="space-y-4">
+            <div class="flex items-center justify-between border-b border-purple-900 pb-2">
+              <h2 class="text-2xl text-purple-300">Composition des rôles</h2>
+              <span class="text-lg text-gray-400">
+                Total: <span class="text-white font-bold">{{ totalRoles }}</span> rôles
+              </span>
+            </div>
+
+            <!-- Badge Host -->
+            <div v-if="isHost" class="inline-flex items-center gap-2 px-3 py-1 bg-yellow-900/30 border border-yellow-700 text-yellow-400 text-sm">
+              <span>★</span> Vous êtes l'hôte
+              <span v-if="!isWaiting" class="text-yellow-600">(modifications désactivées)</span>
+            </div>
+
+            <!-- Liste des rôles -->
+            <div class="grid gap-3">
+              <div 
+                v-for="role in rolesList" 
+                :key="role.type"
+                class="bg-[#1e1b29] p-4 border-2 border-[#584c75] flex items-center justify-between"
+              >
+                <div class="flex items-center gap-3">
+                  <span class="text-2xl" :class="role.config.color">{{ role.config.name }}</span>
+                  <span v-if="role.config.maxCount" class="text-sm text-gray-500">(max {{ role.config.maxCount }})</span>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                  <!-- Contrôles de modification (Host uniquement, jeu en attente) -->
+                  <template v-if="canEditSettings">
+                    <button 
+                      @click="updateRoleCount(role.type, -1)"
+                      :disabled="role.count <= 0"
+                      class="w-10 h-10 text-2xl bg-[#3a0b0b] border-2 border-red-900 text-red-400 hover:bg-red-900/50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      -
+                    </button>
+                    <span class="text-3xl font-bold text-white w-12 text-center">{{ role.count }}</span>
+                    <button 
+                      @click="updateRoleCount(role.type, 1)"
+                      class="w-10 h-10 text-2xl bg-[#0b3a1a] border-2 border-green-900 text-green-400 hover:bg-green-900/50 transition-colors"
+                    >
+                      +
+                    </button>
+                  </template>
+                  
+                  <!-- Affichage simple (non-host ou jeu actif) -->
+                  <span v-else class="text-3xl font-bold text-white">{{ role.count }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Message d'info pour non-host -->
+            <p v-if="!isHost && isWaiting" class="text-sm text-gray-500 italic">
+              Seul l'hôte peut modifier la composition des rôles.
+            </p>
+          </div>
+
+          <!-- Séparateur -->
+          <div class="border-t border-[#584c75] my-2"></div>
+          
+          <!-- Section: Options locales -->
           <div class="flex items-center gap-4 cursor-pointer select-none" @click="toggleStreamerMode">
             <div class="w-6 h-6 border-2 border-white flex items-center justify-center">
               <div v-if="streamerMode" class="w-3 h-3 bg-white"></div>
