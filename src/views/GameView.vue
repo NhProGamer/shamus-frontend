@@ -108,7 +108,6 @@ const currentPhaseText = computed(() => {
 })
 
 // --- STATE: CHAT ---
-// --- STATE: CHAT ---
 const currentChatChannel = ref<ChatChannel>('village')
 const newMessage = ref('')
 
@@ -153,13 +152,11 @@ const handleChatMessage = (data: ChatMessageEvent) => {
 
 /** Handler pour la mise à jour des données de jeu (remplace updateDay et updateComposition) */
 const handleGameData = (data: GameDataEventData) => {
-  console.log(data)
   actualGame.value = data
 }
 
 /** Handler pour la mise à jour des paramètres de jeu */
 const handleSettingsUpdate = (data: GameSettingsEventData) => {
-  console.log('Settings update received:', data)
   if (actualGame.value) {
     actualGame.value = {
       ...actualGame.value,
@@ -188,7 +185,6 @@ const updateRoleCount = (roleType: RoleType, delta: number) => {
 
   try {
     send(JSON.stringify(event))
-    console.log('Settings update sent:', currentRoles)
   } catch (e) {
     console.error('Erreur envoi settings:', e)
     pushLocalMessage('system', 'Erreur lors de la mise à jour des paramètres.', 'village', 'SYSTÈME', true)
