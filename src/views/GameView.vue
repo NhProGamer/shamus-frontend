@@ -12,9 +12,12 @@ import {
   type GameDataEventData,
   type ChatMessageEvent,
   type Event,
+  type GameSettingsEventData,
   EventChannelGameEvent,
+  EventChannelSettings,
   EventTypeChatMessage,
   EventTypeGameData,
+  EventTypeGameSettings,
 } from "@/types/events.ts";
 
 // --- CONSTANTES ---
@@ -53,9 +56,18 @@ const reconnect = async () => await wsInstance.value?.reconnect()
 const currentMainTab = ref<MainTab>('chat')
 const streamerMode = ref(false)
 
+// --- STATE: UTILISATEUR ---
+const currentUserId = ref<string | null>(null)
+
 // --- STATE: JEU & JOUEURS ---
 // Utilisation de GameDataEventData pour stocker l'état complet du jeu
 const actualGame = ref<GameDataEventData | null>(null)
+
+// --- COMPUTED: HOST STATUS ---
+const isHost = computed(() => {
+  if (!actualGame.value || !currentUserId.value) return false
+  return actualGame.value.host === currentUserId.value
+})
 
 const livingPlayers = computed(() => actualGame.value?.players.filter(p => p.alive) ?? [])
 const deadPlayers = computed(() => actualGame.value?.players.filter(p => !p.alive) ?? [])
@@ -117,6 +129,17 @@ const handleGameData = (data: GameDataEventData) => {
   actualGame.value = data
 }
 
+/** Handler pour la mise à jour des paramètres de jeu */
+const handleSettingsUpdate = (data: GameSettingsEventData) => {
+  console.log('Settings update received:', data)
+  if (actualGame.value) {
+    actualGame.value = {
+      ...actualGame.value,
+      settings: { roles: data.roles }
+    }
+  }
+}
+
 /** Gestion centralisée des messages entrants (Dispatcher) */
 const handleIncomingMessage = (message: WebSocketMessage) => {
   // Casting vers l'interface Event générique
@@ -136,6 +159,14 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         break
       default:
         console.log("Event Game non géré:", event.type, event.data)
+    }
+  } else if (event.channel === EventChannelSettings) {
+    switch (event.type) {
+      case EventTypeGameSettings:
+        handleSettingsUpdate(event.data as GameSettingsEventData)
+        break
+      default:
+        console.log("Event Settings non géré:", event.type, event.data)
     }
   } else {
     // Autres channels si nécessaire
@@ -208,6 +239,9 @@ const initializeGame = async () => {
       await userManager.signinRedirect({ state: { path: route.fullPath } })
       return
     }
+
+    // Stocker l'ID utilisateur pour vérifier le statut host
+    currentUserId.value = user.profile.sub || null
 
     const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080'
     const finalUrl = `${baseUrl}/app/ws/${gameID}?access_token=${user.access_token}`
