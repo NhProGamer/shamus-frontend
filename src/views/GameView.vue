@@ -125,6 +125,35 @@ const currentPhaseText = computed(() => {
 const currentChatChannel = ref<ChatChannel>('village')
 const newMessage = ref('')
 
+// --- COMPUTED: CHAT RESTRICTIONS ---
+const isNight = computed(() => actualGame.value?.phase === 'night')
+
+const availableChannels = computed<ChatChannel[]>(() => {
+  // La nuit: seuls loups et amoureux peuvent parler dans leurs channels
+  if (isNight.value) {
+    return ['loups', 'amoureux']
+  }
+  // Le jour (et phases start/vote): seul le village est ouvert
+  return ['village']
+})
+
+const canSendToCurrentChannel = computed(() => {
+  return availableChannels.value.includes(currentChatChannel.value)
+})
+
+const chatPlaceholder = computed(() => {
+  if (connectionStatus.value !== 'open') {
+    return 'Connexion en cours...'
+  }
+  if (!canSendToCurrentChannel.value) {
+    if (isNight.value && currentChatChannel.value === 'village') {
+      return 'Le village dort... Silence !'
+    }
+    return 'Ce channel est fermé pendant le jour.'
+  }
+  return 'Écrivez votre message...'
+})
+
 // Extension locale pour l'affichage (ajout ID, timestamp, isSystem)
 type UIMessage = ChatMessageEvent & {
   id: string
