@@ -520,15 +520,19 @@ onUnmounted(() => {
         <div v-if="currentMainTab === 'chat'" class="h-full flex flex-col gap-2">
           <!-- Channels -->
           <div class="flex gap-2 mb-1">
-            <button v-for="chan in ['village', 'loups', 'amoureux'] as const" :key="chan"
-                    @click="currentChatChannel = chan"
-                    class="px-4 py-1 text-xl border-t-2 border-x-2 rounded-t-sm transition-all capitalize"
-                    :class="{
-                'border-[#584c75] bg-[#2d2640] text-blue-200': currentChatChannel === chan && chan === 'village',
-                'border-[#991b1b] bg-[#3a0b0b] text-red-300': currentChatChannel === chan && chan === 'loups',
-                'border-[#d946ef] bg-[#381035] text-pink-300': currentChatChannel === chan && chan === 'amoureux',
-                'border-transparent text-gray-500': currentChatChannel !== chan
-              }"
+            <button 
+                v-for="chan in ['village', 'loups', 'amoureux'] as const" 
+                :key="chan"
+                @click="availableChannels.includes(chan) && (currentChatChannel = chan)"
+                :disabled="!availableChannels.includes(chan)"
+                class="px-4 py-1 text-xl border-t-2 border-x-2 rounded-t-sm transition-all capitalize"
+                :class="{
+                  'border-[#584c75] bg-[#2d2640] text-blue-200': currentChatChannel === chan && chan === 'village' && availableChannels.includes(chan),
+                  'border-[#991b1b] bg-[#3a0b0b] text-red-300': currentChatChannel === chan && chan === 'loups' && availableChannels.includes(chan),
+                  'border-[#d946ef] bg-[#381035] text-pink-300': currentChatChannel === chan && chan === 'amoureux' && availableChannels.includes(chan),
+                  'border-transparent text-gray-500': currentChatChannel !== chan && availableChannels.includes(chan),
+                  'opacity-40 cursor-not-allowed border-transparent text-gray-600': !availableChannels.includes(chan)
+                }"
             >
               {{ chan }}
             </button>
@@ -562,13 +566,13 @@ onUnmounted(() => {
                 v-model="newMessage"
                 @keyup.enter="handleSendMessage"
                 type="text"
-                class="pixel-inset flex-grow bg-[#0f0518] text-white px-4 py-2 text-xl focus:outline-none focus:border-purple-500"
-                placeholder="Écrivez votre message..."
-                :disabled="connectionStatus !== 'open'"
+                class="pixel-inset flex-grow bg-[#0f0518] text-white px-4 py-2 text-xl focus:outline-none focus:border-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                :placeholder="chatPlaceholder"
+                :disabled="connectionStatus !== 'open' || !canSendToCurrentChannel"
             />
             <button @click="handleSendMessage"
-                    class="btn-pixel-secondary px-6 text-xl uppercase"
-                    :disabled="connectionStatus !== 'open' || !newMessage.trim()"
+                    class="btn-pixel-secondary px-6 text-xl uppercase disabled:opacity-40 disabled:cursor-not-allowed"
+                    :disabled="connectionStatus !== 'open' || !newMessage.trim() || !canSendToCurrentChannel"
             >
               Envoyer
             </button>
