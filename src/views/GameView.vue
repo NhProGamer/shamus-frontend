@@ -336,6 +336,15 @@ const handleSendMessage = () => {
     return
   }
 
+  // Vérifier si le channel est disponible selon la phase
+  if (!canSendToCurrentChannel.value) {
+    const reason = isNight.value 
+      ? 'Le village dort pendant la nuit.' 
+      : 'Ce channel est fermé pendant le jour.'
+    pushLocalMessage('system', reason, currentChatChannel.value, 'SYSTÈME', true)
+    return
+  }
+
   if (content.length > MAX_MSG_LENGTH) {
     pushLocalMessage('system', `Message trop long (max ${MAX_MSG_LENGTH}).`, currentChatChannel.value, 'SYSTÈME', true)
     return
