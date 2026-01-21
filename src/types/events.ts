@@ -43,6 +43,7 @@ export interface GameSettingsEventData {
 // Interface PlayersDetailsData
 export interface PlayersDetailsData {
     id: PlayerID;
+    username: string
     alive: boolean;
     role?: RoleType | null;
     target?: PlayerID | null;

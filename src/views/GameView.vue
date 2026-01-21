@@ -545,7 +545,7 @@ onUnmounted(() => {
           </h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div v-for="player in livingPlayers" :key="player.id" class="bg-[#1e1b29] p-3 border-2 border-[#584c75] flex justify-between items-center">
-              <span class="text-xl text-white">{{ player.id }}</span>
+              <span class="text-xl text-white">{{ player.username }}</span>
               <span class="text-green-500">Vivant</span>
             </div>
           </div>
@@ -556,7 +556,7 @@ onUnmounted(() => {
           </h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div v-for="player in deadPlayers" :key="player.id" class="bg-[#150a1a] p-3 border-2 border-[#2a1d3a] flex justify-between items-center opacity-60">
-              <span class="text-gray-400 line-through">{{ player.id }}</span>
+              <span class="text-gray-400 line-through">{{ player.username }}</span>
               <span class="text-red-700">Mort</span>
             </div>
           </div>
