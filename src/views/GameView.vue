@@ -72,6 +72,11 @@ const currentUserId = ref<string | null>(null)
 const settingsError = ref<string | null>(null)
 let settingsErrorTimeout: ReturnType<typeof setTimeout> | null = null
 
+// --- STATE: DEBOUNCE SETTINGS ---
+const pendingRoles = ref<Record<RoleType, number> | null>(null)
+let settingsDebounceTimeout: ReturnType<typeof setTimeout> | null = null
+const SETTINGS_DEBOUNCE_DELAY = 300 // ms
+
 // --- STATE: JEU & JOUEURS ---
 // Utilisation de GameDataEventData pour stocker l'état complet du jeu
 const actualGame = ref<GameDataEventData | null>(null)
@@ -173,22 +178,14 @@ const handleSettingsUpdate = (data: GameSettingsEventData) => {
   }
 }
 
-/** Envoie une modification de rôle au serveur via WebSocket */
-const updateRoleCount = (roleType: RoleType, delta: number) => {
-  if (!actualGame.value?.settings?.roles || !canEditSettings.value) return
+/** Envoie les settings en attente au serveur */
+const sendPendingSettings = () => {
+  if (!pendingRoles.value) return
 
-  const currentRoles = { ...actualGame.value.settings.roles }
-  const currentCount = currentRoles[roleType] || 0
-  const newCount = Math.max(0, currentCount + delta)
-
-  // Mise à jour optimiste locale (sera écrasée par la réponse serveur)
-  currentRoles[roleType] = newCount
-
-  // Construction de l'événement à envoyer
   const event: Event<GameSettingsEventData> = {
     channel: EventChannelSettings,
     type: EventTypeGameSettings,
-    data: { roles: currentRoles }
+    data: { roles: pendingRoles.value }
   }
 
   try {
@@ -197,6 +194,34 @@ const updateRoleCount = (roleType: RoleType, delta: number) => {
     console.error('Erreur envoi settings:', e)
     pushLocalMessage('system', 'Erreur lors de la mise à jour des paramètres.', 'village', 'SYSTÈME', true)
   }
+
+  pendingRoles.value = null
+}
+
+/** Modifie un rôle avec debounce pour éviter le spam de requêtes */
+const updateRoleCount = (roleType: RoleType, delta: number) => {
+  if (!actualGame.value?.settings?.roles || !canEditSettings.value) return
+
+  // Utiliser les roles en attente s'ils existent, sinon les actuels
+  const baseRoles = pendingRoles.value || { ...actualGame.value.settings.roles }
+  const currentCount = baseRoles[roleType] || 0
+  const newCount = Math.max(0, currentCount + delta)
+
+  // Mise à jour locale immédiate pour un feedback instantané
+  const newRoles = { ...baseRoles, [roleType]: newCount }
+  pendingRoles.value = newRoles
+
+  // Appliquer aussi à l'état local pour affichage immédiat
+  if (actualGame.value) {
+    actualGame.value = {
+      ...actualGame.value,
+      settings: { roles: newRoles }
+    }
+  }
+
+  // Debounce: annuler le timeout précédent et en créer un nouveau
+  if (settingsDebounceTimeout) clearTimeout(settingsDebounceTimeout)
+  settingsDebounceTimeout = setTimeout(sendPendingSettings, SETTINGS_DEBOUNCE_DELAY)
 }
 
 /** Affiche une erreur temporaire dans l'UI */
@@ -373,6 +398,9 @@ onUnmounted(() => {
   if (wsInstance.value) {
     wsInstance.value.close(1000, 'Component Unmounted')
   }
+  // Nettoyer les timeouts
+  if (settingsDebounceTimeout) clearTimeout(settingsDebounceTimeout)
+  if (settingsErrorTimeout) clearTimeout(settingsErrorTimeout)
 })
 </script>
 
