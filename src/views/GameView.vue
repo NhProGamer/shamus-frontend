@@ -1,24 +1,59 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, inject, onUnmounted, watch, shallowRef } from 'vue'
 import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useWebSocket, type WebSocketMessage, type WebSocketStatus, type UseWebSocketReturn } from "@/composables/useWebSocket"
 import { userManager } from '@/oidc'
+import { useGameStore } from '@/stores/gameStore'
 import {
   type MainTab,
   type ChatChannel,
 } from "@/types/ui.ts"
 import type { RoleType } from "@/types/roles.ts"
+import type { PlayerID } from "@/types/player.ts"
 import ErrorDisplay from "@/components/ErrorDisplay.vue"
+
+// Game components
+import TimerDisplay from "@/components/game/TimerDisplay.vue"
+import StartGameButton from "@/components/game/StartGameButton.vue"
+import VotePanel from "@/components/game/VotePanel.vue"
+import NightActionModal from "@/components/game/NightActionModal.vue"
+import WinModal from "@/components/game/WinModal.vue"
+
 import {
-  type GameDataEventData,
   type ChatMessageEvent,
   type Event,
   type GameSettingsEventData,
+  type GameDataEventData,
+  type TimerEventData,
+  type TurnEventData,
+  type VoteEventData,
+  type DayEventData,
+  type NightEventData,
+  type DeathEventData,
+  type WinEventData,
+  type RoleRevealEventData,
+  type SeerRevealEventData,
   EventChannelGameEvent,
   EventChannelSettings,
+  EventChannelTimer,
   EventTypeChatMessage,
   EventTypeGameData,
   EventTypeGameSettings,
+  EventTypeTimer,
+  EventTypeTurn,
+  EventTypeVote,
+  EventTypeDay,
+  EventTypeNight,
+  EventTypeDeath,
+  EventTypeWin,
+  EventTypeRoleReveal,
+  EventTypeSeerReveal,
+  EventTypeStartGame,
+  EventTypeVillageVote,
+  EventTypeSeerAction,
+  EventTypeWerewolfVote,
+  EventTypeWitchAction,
 } from "@/types/events.ts";
 
 // --- CONSTANTES ---
@@ -45,6 +80,33 @@ const route = useRoute()
 const showLoading = inject<() => void>('showLoading', () => {})
 const hideLoading = inject<() => void>('hideLoading', () => {})
 
+// --- PINIA STORE ---
+const gameStore = useGameStore()
+const {
+  game,
+  timer,
+  voteState,
+  nightTurn,
+  winData,
+  myRole,
+  isHost,
+  isWaiting,
+  isStarted,
+  isEnded,
+  isVotePhase,
+  isNight,
+  isDay,
+  currentPhase,
+  currentDay,
+  livingPlayers,
+  deadPlayers,
+  playerCount,
+  totalRoles,
+  rolesMatchPlayers,
+  isMyTurn,
+  isAlive,
+} = storeToRefs(gameStore)
+
 // --- CONFIGURATION WEBSOCKET (Approche Impérative) ---
 const gameID = route.query.gameID as string
 
@@ -52,7 +114,6 @@ const gameID = route.query.gameID as string
 const wsInstance = shallowRef<UseWebSocketReturn | null>(null)
 
 // --- PROXIES REACTIFS (Pour garder le template propre) ---
-// Ces computed permettent d'utiliser les variables dans le template même si wsInstance est null au début
 const connectionStatus = computed(() => wsInstance.value?.status.value ?? 'closed')
 const wsError = computed(() => wsInstance.value?.error.value ?? null)
 
@@ -65,9 +126,6 @@ const reconnect = async () => await wsInstance.value?.reconnect()
 const currentMainTab = ref<MainTab>('chat')
 const streamerMode = ref(false)
 
-// --- STATE: UTILISATEUR ---
-const currentUserId = ref<string | null>(null)
-
 // --- STATE: ERREURS ---
 const settingsError = ref<string | null>(null)
 let settingsErrorTimeout: ReturnType<typeof setTimeout> | null = null
@@ -78,47 +136,24 @@ const lastConfirmedRoles = ref<Record<RoleType, number> | null>(null)
 let settingsDebounceTimeout: ReturnType<typeof setTimeout> | null = null
 const SETTINGS_DEBOUNCE_DELAY = 300 // ms
 
-// --- STATE: JEU & JOUEURS ---
-// Utilisation de GameDataEventData pour stocker l'état complet du jeu
-const actualGame = ref<GameDataEventData | null>(null)
-
-// --- COMPUTED: HOST STATUS ---
-const isHost = computed(() => {
-  if (!actualGame.value || !currentUserId.value) return false
-  return actualGame.value.host === currentUserId.value
-})
-
-// --- COMPUTED: GAME STATUS ---
-const isWaiting = computed(() => actualGame.value?.status === 'waiting')
+// --- COMPUTED: GAME STATUS (from store) ---
 const canEditSettings = computed(() => isHost.value && isWaiting.value)
 
 // --- COMPUTED: ROLES ---
-const totalRoles = computed(() => {
-  if (!actualGame.value?.settings?.roles) return 0
-  return Object.values(actualGame.value.settings.roles).reduce((sum, count) => sum + count, 0)
-})
-
-const playerCount = computed(() => actualGame.value?.players?.length ?? 0)
-
-const rolesMatchPlayers = computed(() => totalRoles.value === playerCount.value)
-
 const rolesList = computed(() => {
-  if (!actualGame.value?.settings?.roles) return []
-  return Object.entries(actualGame.value.settings.roles).map(([role, count]) => ({
+  if (!game.value?.settings?.roles) return []
+  return Object.entries(game.value.settings.roles).map(([role, count]) => ({
     type: role as RoleType,
     count: count as number,
     config: ROLE_CONFIG[role as RoleType] || { name: role, color: 'text-gray-400' }
   }))
 })
 
-const livingPlayers = computed(() => actualGame.value?.players.filter(p => p.alive) ?? [])
-const deadPlayers = computed(() => actualGame.value?.players.filter(p => !p.alive) ?? [])
-
 const currentPhaseText = computed(() => {
-  if (!actualGame.value) return 'CHARGEMENT...'
-  return actualGame.value.phase === 'day'
-      ? `JOUR ${actualGame.value.day}`
-      : `NUIT ${actualGame.value.day}`
+  if (!game.value) return 'CHARGEMENT...'
+  return game.value.phase === 'day'
+      ? `JOUR ${game.value.day}`
+      : `NUIT ${game.value.day}`
 })
 
 // --- STATE: CHAT ---
@@ -126,8 +161,6 @@ const currentChatChannel = ref<ChatChannel>('village')
 const newMessage = ref('')
 
 // --- COMPUTED: CHAT RESTRICTIONS ---
-const isNight = computed(() => actualGame.value?.phase === 'night')
-
 const availableChannels = computed<ChatChannel[]>(() => {
   // La nuit: seuls loups et amoureux peuvent parler dans leurs channels
   if (isNight.value) {
@@ -193,9 +226,9 @@ const handleChatMessage = (data: ChatMessageEvent) => {
   })
 }
 
-/** Handler pour la mise à jour des données de jeu (remplace updateDay et updateComposition) */
+/** Handler pour la mise à jour des données de jeu */
 const handleGameData = (data: GameDataEventData) => {
-  actualGame.value = data
+  gameStore.handleGameData(data)
   // Sauvegarder l'état initial des roles pour rollback éventuel
   if (data.settings?.roles) {
     lastConfirmedRoles.value = { ...data.settings.roles }
@@ -204,11 +237,12 @@ const handleGameData = (data: GameDataEventData) => {
 
 /** Handler pour la mise à jour des paramètres de jeu */
 const handleSettingsUpdate = (data: GameSettingsEventData) => {
-  if (actualGame.value) {
-    actualGame.value = {
-      ...actualGame.value,
+  if (game.value) {
+    // Update store via handleGameData
+    gameStore.handleGameData({
+      ...game.value,
       settings: { roles: data.roles }
-    }
+    })
     // Sauvegarder l'état confirmé par le serveur pour rollback éventuel
     lastConfirmedRoles.value = { ...data.roles }
     pendingRoles.value = null
@@ -237,10 +271,10 @@ const sendPendingSettings = () => {
 
 /** Modifie un rôle avec debounce pour éviter le spam de requêtes */
 const updateRoleCount = (roleType: RoleType, delta: number) => {
-  if (!actualGame.value?.settings?.roles || !canEditSettings.value) return
+  if (!game.value?.settings?.roles || !canEditSettings.value) return
 
   // Utiliser les roles en attente s'ils existent, sinon les actuels
-  const baseRoles = pendingRoles.value || { ...actualGame.value.settings.roles }
+  const baseRoles = pendingRoles.value || { ...game.value.settings.roles }
   const currentCount = baseRoles[roleType] || 0
   const newCount = Math.max(0, currentCount + delta)
 
@@ -249,11 +283,11 @@ const updateRoleCount = (roleType: RoleType, delta: number) => {
   pendingRoles.value = newRoles
 
   // Appliquer aussi à l'état local pour affichage immédiat
-  if (actualGame.value) {
-    actualGame.value = {
-      ...actualGame.value,
+  if (game.value) {
+    gameStore.handleGameData({
+      ...game.value,
       settings: { roles: newRoles }
-    }
+    })
   }
 
   // Debounce: annuler le timeout précédent et en créer un nouveau
@@ -273,11 +307,11 @@ const showSettingsError = (message: string) => {
   pendingRoles.value = null
   
   // Rollback vers le dernier état confirmé par le serveur
-  if (lastConfirmedRoles.value && actualGame.value) {
-    actualGame.value = {
-      ...actualGame.value,
+  if (lastConfirmedRoles.value && game.value) {
+    gameStore.handleGameData({
+      ...game.value,
       settings: { roles: { ...lastConfirmedRoles.value } }
-    }
+    })
   }
   
   if (settingsErrorTimeout) clearTimeout(settingsErrorTimeout)
@@ -285,6 +319,93 @@ const showSettingsError = (message: string) => {
     settingsError.value = null
   }, 5000)
 }
+
+// ========================
+// ACTION SENDING FUNCTIONS
+// ========================
+
+/** Start game (host only) */
+const sendStartGame = () => {
+  if (!isHost.value || !isWaiting.value) return
+  
+  const event: Event<{}> = {
+    channel: EventChannelGameEvent,
+    type: EventTypeStartGame,
+    data: {}
+  }
+  
+  try {
+    send(JSON.stringify(event))
+  } catch (e) {
+    console.error('Erreur envoi start_game:', e)
+    pushLocalMessage('system', 'Erreur lors du lancement de la partie.', 'village', 'SYSTÈME', true)
+  }
+}
+
+/** Village vote */
+const sendVillageVote = (targetId: PlayerID | null) => {
+  const event: Event<{ targetId: PlayerID | null }> = {
+    channel: EventChannelGameEvent,
+    type: EventTypeVillageVote,
+    data: { targetId }
+  }
+  
+  try {
+    send(JSON.stringify(event))
+  } catch (e) {
+    console.error('Erreur envoi village_vote:', e)
+    pushLocalMessage('system', 'Erreur lors de l\'envoi du vote.', 'village', 'SYSTÈME', true)
+  }
+}
+
+/** Seer action */
+const sendSeerAction = (targetId: PlayerID) => {
+  const event: Event<{ targetId: PlayerID }> = {
+    channel: EventChannelGameEvent,
+    type: EventTypeSeerAction,
+    data: { targetId }
+  }
+  
+  try {
+    send(JSON.stringify(event))
+  } catch (e) {
+    console.error('Erreur envoi seer_action:', e)
+  }
+}
+
+/** Werewolf vote */
+const sendWerewolfVote = (targetId: PlayerID | null) => {
+  const event: Event<{ targetId: PlayerID | null }> = {
+    channel: EventChannelGameEvent,
+    type: EventTypeWerewolfVote,
+    data: { targetId }
+  }
+  
+  try {
+    send(JSON.stringify(event))
+  } catch (e) {
+    console.error('Erreur envoi werewolf_vote:', e)
+  }
+}
+
+/** Witch action */
+const sendWitchAction = (healTargetId: PlayerID | undefined, poisonTargetId: PlayerID | undefined) => {
+  const event: Event<{ healTargetId?: PlayerID; poisonTargetId?: PlayerID }> = {
+    channel: EventChannelGameEvent,
+    type: EventTypeWitchAction,
+    data: { healTargetId, poisonTargetId }
+  }
+  
+  try {
+    send(JSON.stringify(event))
+  } catch (e) {
+    console.error('Erreur envoi witch_action:', e)
+  }
+}
+
+// ========================
+// MESSAGE DISPATCHER
+// ========================
 
 /** Gestion centralisée des messages entrants (Dispatcher) */
 const handleIncomingMessage = (message: WebSocketMessage) => {
@@ -309,6 +430,42 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
       case EventTypeGameData:
         handleGameData(event.data as GameDataEventData)
         break
+      case EventTypeDay:
+        gameStore.handleDayEvent(event.data as DayEventData)
+        // Announce deaths
+        const dayData = event.data as DayEventData
+        if (dayData.deaths.length > 0) {
+          pushLocalMessage('system', `${dayData.deaths.length} personne(s) ont été tuées cette nuit...`, 'village', 'SYSTÈME', true)
+        } else {
+          pushLocalMessage('system', 'Personne n\'est mort cette nuit !', 'village', 'SYSTÈME', true)
+        }
+        break
+      case EventTypeNight:
+        gameStore.handleNightEvent()
+        pushLocalMessage('system', 'La nuit tombe sur le village...', 'village', 'SYSTÈME', true)
+        break
+      case EventTypeVote:
+        gameStore.handleVoteEvent(event.data as VoteEventData)
+        break
+      case EventTypeDeath:
+        gameStore.handleDeathEvent(event.data as DeathEventData)
+        break
+      case EventTypeWin:
+        gameStore.handleWinEvent(event.data as WinEventData)
+        const winInfo = event.data as WinEventData
+        pushLocalMessage('system', `La partie est terminée ! Les ${winInfo.winningClan} ont gagné !`, 'village', 'SYSTÈME', true)
+        break
+      case EventTypeRoleReveal:
+        gameStore.handleRoleReveal(event.data as RoleRevealEventData)
+        const roleData = event.data as RoleRevealEventData
+        pushLocalMessage('system', `Votre rôle est : ${roleData.role}`, 'village', 'SYSTÈME', true)
+        break
+      case EventTypeSeerReveal:
+        gameStore.handleSeerReveal(event.data as SeerRevealEventData)
+        break
+      case EventTypeTurn:
+        gameStore.handleTurnEvent(event.data as TurnEventData)
+        break
       default:
         console.log("Event Game non géré:", event.type, event.data)
     }
@@ -319,6 +476,14 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         break
       default:
         console.log("Event Settings non géré:", event.type, event.data)
+    }
+  } else if (event.channel === EventChannelTimer) {
+    switch (event.type) {
+      case EventTypeTimer:
+        gameStore.handleTimerEvent(event.data as TimerEventData)
+        break
+      default:
+        console.log("Event Timer non géré:", event.type, event.data)
     }
   } else {
     // Autres channels si nécessaire
@@ -352,11 +517,6 @@ const handleSendMessage = () => {
 
   newMessage.value = ''
 
-  // Construction de l'événement à envoyer
-  // Note: Le serveur attend probablement un Event<ChatMessageEvent>
-  // Mais l'interface d'envoi peut différer de celle de réception (pas d'ID joueur par ex).
-  // On assume ici que le serveur complète les infos manquantes (playerID, nickname).
-
   const chatData: ChatMessageEvent = {
     playerID: '',
     message: content,
@@ -382,6 +542,20 @@ const toggleStreamerMode = () => {
   pushLocalMessage('system', `Mode Streamer ${streamerMode.value ? 'activé' : 'désactivé'}.`, 'village', 'SYSTÈME', true)
 }
 
+// ========================
+// WIN MODAL HANDLERS
+// ========================
+
+const handleWinModalClose = () => {
+  // Just clear the win data to hide the modal
+  // The game state will remain for players to see the results
+}
+
+const handlePlayAgain = () => {
+  // TODO: Implement play again logic (create new game or return to lobby)
+  console.log('Play again requested')
+}
+
 // --- INITIALISATION & LIFECYCLE ---
 
 const initializeGame = async () => {
@@ -401,8 +575,8 @@ const initializeGame = async () => {
       return
     }
 
-    // Stocker l'ID utilisateur pour vérifier le statut host
-    currentUserId.value = user.profile.sub || null
+    // Stocker l'ID utilisateur dans le store
+    gameStore.setCurrentUserId(user.profile.sub || '')
 
     const baseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8080'
     const finalUrl = `${baseUrl}/app/ws/${gameID}?access_token=${user.access_token}`
@@ -427,8 +601,6 @@ const initializeGame = async () => {
 }
 
 // Watchers
-// Note: Le watcher sur wsMessages a été supprimé car on utilise onReceive maintenant.
-
 watch(connectionStatus, (status) => {
   if (status === 'open') {
     hideLoading()
@@ -463,6 +635,8 @@ onUnmounted(() => {
   // Nettoyer les timeouts
   if (settingsDebounceTimeout) clearTimeout(settingsDebounceTimeout)
   if (settingsErrorTimeout) clearTimeout(settingsErrorTimeout)
+  // Reset store
+  gameStore.resetStore()
 })
 </script>
 
@@ -472,7 +646,10 @@ onUnmounted(() => {
     <!-- HEADER -->
     <header class="mb-4 flex w-full max-w-4xl items-center justify-between px-2">
       <h1 class="text-3xl text-white drop-shadow-md">SHAMUS <span class="text-purple-400 text-xl">Ingame</span></h1>
-      <div class="pixel-badge bg-red-900 text-red-200 px-3 py-1 text-lg">{{ currentPhaseText }}</div>
+      
+      <!-- Timer Display (replaces static badge when game is active) -->
+      <TimerDisplay v-if="isStarted" />
+      <div v-else class="pixel-badge bg-red-900 text-red-200 px-3 py-1 text-lg">{{ currentPhaseText }}</div>
     </header>
 
     <!-- MAIN CONTAINER -->
@@ -560,6 +737,13 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <!-- Vote Panel (shown during vote phase) -->
+          <VotePanel 
+            v-if="isVotePhase && voteState.active"
+            @vote="sendVillageVote"
+            class="mt-2"
+          />
+
           <!-- Input Area -->
           <div class="flex gap-2 mt-2">
             <input
@@ -607,6 +791,12 @@ onUnmounted(() => {
         <!-- TAB: PARAMÈTRES -->
         <div v-else-if="currentMainTab === 'settings'" class="h-full flex flex-col gap-6 p-4 overflow-y-auto">
           
+          <!-- Start Game Button (host only, waiting phase) -->
+          <StartGameButton 
+            v-if="isWaiting"
+            @start-game="sendStartGame"
+          />
+
           <!-- Section: Composition des rôles -->
           <div class="space-y-4">
             <div class="flex items-center justify-between border-b border-purple-900 pb-2">
@@ -685,6 +875,19 @@ onUnmounted(() => {
 
           <!-- Séparateur -->
           <div class="border-t border-[#584c75] my-2"></div>
+
+          <!-- My Role Display (when game started) -->
+          <div v-if="isStarted && myRole" class="my-role-section p-4 bg-gradient-to-r from-purple-900/50 to-purple-800/30 border border-purple-700 rounded-lg">
+            <h3 class="text-xl text-purple-300 mb-2">Votre Rôle</h3>
+            <p class="text-3xl font-bold" :class="{
+              'text-blue-400': myRole === 'villager',
+              'text-red-500': myRole === 'werewolf',
+              'text-purple-400': myRole === 'seer',
+              'text-green-400': myRole === 'witch'
+            }">
+              {{ ROLE_CONFIG[myRole]?.name || myRole }}
+            </p>
+          </div>
           
           <!-- Section: Options locales -->
           <div class="flex items-center gap-4 cursor-pointer select-none" @click="toggleStreamerMode">
@@ -703,6 +906,19 @@ onUnmounted(() => {
 
       </div>
     </div>
+
+    <!-- NIGHT ACTION MODAL -->
+    <NightActionModal 
+      @seer-action="sendSeerAction"
+      @werewolf-vote="sendWerewolfVote"
+      @witch-action="sendWitchAction"
+    />
+
+    <!-- WIN MODAL -->
+    <WinModal 
+      @close="handleWinModalClose"
+      @play-again="handlePlayAgain"
+    />
   </div>
 </template>
 
