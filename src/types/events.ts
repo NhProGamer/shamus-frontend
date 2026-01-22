@@ -36,6 +36,10 @@ export const EventTypeWin: EventType = "win";
 export const EventTypeRoleReveal: EventType = "role_reveal";
 export const EventTypeSeerReveal: EventType = "seer_reveal";
 
+// Event types - Server → Client (error and ack)
+export const EventTypeError: EventType = "error";
+export const EventTypeAck: EventType = "ack";
+
 // Event types - Client → Server (actions)
 export const EventTypeStartGame: EventType = "start_game";
 export const EventTypeVillageVote: EventType = "village_vote";
@@ -184,6 +188,43 @@ export interface SeerRevealEventData {
 }
 
 // ========================
+// ERROR AND ACK INTERFACES
+// ========================
+
+// Error codes from backend
+export type ErrorCode =
+    | 'WRONG_PHASE'
+    | 'NOT_YOUR_TURN'
+    | 'ALREADY_ACTED'
+    | 'GAME_NOT_ACTIVE'
+    | 'PLAYER_DEAD'
+    | 'WRONG_ROLE'
+    | 'INVALID_TARGET'
+    | 'TARGET_DEAD'
+    | 'CANNOT_TARGET_SELF'
+    | 'ABILITY_USED'
+    | 'CAN_ONLY_HEAL_VICTIM'
+    | 'VOTE_NOT_FOUND'
+    | 'VOTE_NOT_ACTIVE'
+    | 'INVALID_VOTER'
+    | 'INVALID_ACTION'
+    | 'UNKNOWN_ERROR';
+
+// Error event data (server → client)
+export interface ErrorEventData {
+    code: ErrorCode;
+    message: string;
+    action?: string;  // The action that caused the error
+}
+
+// Ack event data (server → client)
+export interface AckEventData {
+    action: string;
+    success: boolean;
+    message?: string;
+}
+
+// ========================
 // ACTION INTERFACES (Client → Server)
 // ========================
 
@@ -244,3 +285,7 @@ export type VillageVoteAction = Event<VillageVoteActionData>;
 export type SeerAction = Event<SeerActionData>;
 export type WerewolfVoteAction = Event<WerewolfVoteActionData>;
 export type WitchAction = Event<WitchActionData>;
+
+// Error and Ack events
+export type ErrorEvent = Event<ErrorEventData>;
+export type AckEvent = Event<AckEventData>;
