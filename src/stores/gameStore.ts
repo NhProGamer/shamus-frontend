@@ -1,0 +1,346 @@
+import { ref, computed } from 'vue'
+import { defineStore } from 'pinia'
+import type { PlayerID } from '@/types/player'
+import type { RoleType } from '@/types/roles'
+import type { GamePhase } from '@/types/game'
+import type {
+    GameDataEventData,
+    TimerEventData,
+    TurnEventData,
+    VoteEventData,
+    DayEventData,
+    DeathEventData,
+    WinEventData,
+    RoleRevealEventData,
+    SeerRevealEventData,
+    PlayersDetailsData,
+    Clan,
+} from '@/types/events'
+
+// ========================
+// GAME STORE
+// ========================
+
+export const useGameStore = defineStore('game', () => {
+    // ========================
+    // STATE
+    // ========================
+
+    // Current user
+    const currentUserId = ref<string | null>(null)
+
+    // Game state (from server)
+    const game = ref<GameDataEventData | null>(null)
+
+    // Timer state
+    const timer = ref<{
+        phase: GamePhase
+        roleType?: RoleType
+        duration: number
+        remaining: number
+        active: boolean
+    } | null>(null)
+
+    // Vote state
+    const voteState = ref<{
+        active: boolean
+        votes: Record<PlayerID, PlayerID | null>  // voter -> target
+        myVote: PlayerID | null
+        result?: PlayerID | null  // eliminated player
+    }>({
+        active: false,
+        votes: {},
+        myVote: null,
+    })
+
+    // Night turn state (when it's my turn to act)
+    const nightTurn = ref<TurnEventData | null>(null)
+
+    // Seer reveal (result of seer action)
+    const seerReveal = ref<SeerRevealEventData | null>(null)
+
+    // Win state (game ended)
+    const winData = ref<WinEventData | null>(null)
+
+    // Recent deaths (for announcements)
+    const recentDeaths = ref<PlayerID[]>([])
+
+    // My revealed role (assigned at game start)
+    const myRole = ref<RoleType | null>(null)
+
+    // ========================
+    // COMPUTED
+    // ========================
+
+    const isHost = computed(() => {
+        if (!game.value || !currentUserId.value) return false
+        return game.value.host === currentUserId.value
+    })
+
+    const isWaiting = computed(() => game.value?.status === 'waiting')
+    const isStarted = computed(() => game.value?.status === 'started')
+    const isEnded = computed(() => game.value?.status === 'ended')
+
+    const currentPhase = computed(() => game.value?.phase ?? 'start')
+    const currentDay = computed(() => game.value?.day ?? 0)
+
+    const isDay = computed(() => currentPhase.value === 'day')
+    const isNight = computed(() => currentPhase.value === 'night')
+    const isVotePhase = computed(() => currentPhase.value === 'vote')
+
+    const players = computed(() => game.value?.players ?? [])
+    const livingPlayers = computed(() => players.value.filter(p => p.alive))
+    const deadPlayers = computed(() => players.value.filter(p => !p.alive))
+
+    const playerCount = computed(() => players.value.length)
+    const totalRoles = computed(() => {
+        if (!game.value?.settings?.roles) return 0
+        return Object.values(game.value.settings.roles).reduce((sum, count) => sum + count, 0)
+    })
+    const rolesMatchPlayers = computed(() => totalRoles.value === playerCount.value)
+
+    const currentPlayer = computed((): PlayersDetailsData | undefined => {
+        if (!currentUserId.value) return undefined
+        return players.value.find(p => p.id === currentUserId.value)
+    })
+
+    const isAlive = computed(() => currentPlayer.value?.alive ?? true)
+
+    // Check if it's my turn to act during night
+    const isMyTurn = computed(() => {
+        if (!nightTurn.value || !myRole.value) return false
+        return nightTurn.value.roleType === myRole.value
+    })
+
+    // Eligible targets for current action
+    const eligibleTargets = computed((): PlayersDetailsData[] => {
+        if (!nightTurn.value) return []
+
+        switch (nightTurn.value.roleType) {
+            case 'seer':
+                // Seer can look at any living player except themselves
+                return livingPlayers.value.filter(p => p.id !== currentUserId.value)
+
+            case 'werewolf':
+                // Werewolves can attack any living non-werewolf
+                return livingPlayers.value.filter(p => p.role !== 'werewolf')
+
+            case 'witch':
+                // For heal: only the werewolf victim (if canHeal)
+                // For poison: any living player (if canPoison)
+                // This is handled in the UI component
+                return livingPlayers.value
+
+            default:
+                return []
+        }
+    })
+
+    // Get vote count for each player
+    const voteCounts = computed((): Record<PlayerID, number> => {
+        const counts: Record<PlayerID, number> = {}
+        for (const target of Object.values(voteState.value.votes)) {
+            if (target) {
+                counts[target] = (counts[target] || 0) + 1
+            }
+        }
+        return counts
+    })
+
+    // ========================
+    // ACTIONS - Event Handlers
+    // ========================
+
+    function setCurrentUserId(userId: string) {
+        currentUserId.value = userId
+    }
+
+    function handleGameData(data: GameDataEventData) {
+        game.value = data
+        // Clear win data if game is restarting
+        if (data.status === 'waiting') {
+            winData.value = null
+            myRole.value = null
+            resetVote()
+        }
+    }
+
+    function handleTimerEvent(data: TimerEventData) {
+        if (data.status === 'expired' || data.status === 'skipped') {
+            timer.value = null
+        } else {
+            timer.value = {
+                phase: data.phase,
+                roleType: data.roleType,
+                duration: data.duration,
+                remaining: data.remaining,
+                active: true,
+            }
+        }
+    }
+
+    function handleTurnEvent(data: TurnEventData) {
+        nightTurn.value = data
+        // Clear any previous seer reveal
+        if (data.roleType === 'seer') {
+            seerReveal.value = null
+        }
+    }
+
+    function handleVoteEvent(data: VoteEventData) {
+        switch (data.type) {
+            case 'start':
+                voteState.value = {
+                    active: true,
+                    votes: {},
+                    myVote: null,
+                }
+                break
+
+            case 'player':
+                if (data.player && data.target !== undefined) {
+                    voteState.value.votes[data.player] = data.target ?? null
+                    // Track my own vote
+                    if (data.player === currentUserId.value) {
+                        voteState.value.myVote = data.target ?? null
+                    }
+                }
+                break
+
+            case 'end':
+                voteState.value.active = false
+                voteState.value.result = data.target ?? null
+                break
+        }
+    }
+
+    function handleDayEvent(data: DayEventData) {
+        recentDeaths.value = data.deaths
+        // Clear night turn state
+        nightTurn.value = null
+    }
+
+    function handleNightEvent() {
+        // Reset for new night
+        recentDeaths.value = []
+        resetVote()
+    }
+
+    function handleDeathEvent(data: DeathEventData) {
+        // Update player state locally for immediate feedback
+        // The full game state will be updated via game_data event
+        if (!recentDeaths.value.includes(data.victim)) {
+            recentDeaths.value.push(data.victim)
+        }
+    }
+
+    function handleWinEvent(data: WinEventData) {
+        winData.value = data
+    }
+
+    function handleRoleReveal(data: RoleRevealEventData) {
+        // My role was revealed to me at game start
+        myRole.value = data.role
+    }
+
+    function handleSeerReveal(data: SeerRevealEventData) {
+        seerReveal.value = data
+        // Clear the turn after action completed
+        nightTurn.value = null
+    }
+
+    // ========================
+    // ACTIONS - UI Helpers
+    // ========================
+
+    function resetVote() {
+        voteState.value = {
+            active: false,
+            votes: {},
+            myVote: null,
+        }
+    }
+
+    function clearNightTurn() {
+        nightTurn.value = null
+    }
+
+    function clearSeerReveal() {
+        seerReveal.value = null
+    }
+
+    function clearRecentDeaths() {
+        recentDeaths.value = []
+    }
+
+    function resetStore() {
+        currentUserId.value = null
+        game.value = null
+        timer.value = null
+        nightTurn.value = null
+        seerReveal.value = null
+        winData.value = null
+        recentDeaths.value = []
+        myRole.value = null
+        resetVote()
+    }
+
+    // ========================
+    // RETURN
+    // ========================
+
+    return {
+        // State
+        currentUserId,
+        game,
+        timer,
+        voteState,
+        nightTurn,
+        seerReveal,
+        winData,
+        recentDeaths,
+        myRole,
+
+        // Computed
+        isHost,
+        isWaiting,
+        isStarted,
+        isEnded,
+        currentPhase,
+        currentDay,
+        isDay,
+        isNight,
+        isVotePhase,
+        players,
+        livingPlayers,
+        deadPlayers,
+        playerCount,
+        totalRoles,
+        rolesMatchPlayers,
+        currentPlayer,
+        isAlive,
+        isMyTurn,
+        eligibleTargets,
+        voteCounts,
+
+        // Actions - Event handlers
+        setCurrentUserId,
+        handleGameData,
+        handleTimerEvent,
+        handleTurnEvent,
+        handleVoteEvent,
+        handleDayEvent,
+        handleNightEvent,
+        handleDeathEvent,
+        handleWinEvent,
+        handleRoleReveal,
+        handleSeerReveal,
+
+        // Actions - UI helpers
+        resetVote,
+        clearNightTurn,
+        clearSeerReveal,
+        clearRecentDeaths,
+        resetStore,
+    }
+})
