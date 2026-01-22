@@ -459,13 +459,20 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         break
       case EventTypeDay:
         gameStore.handleDayEvent(event.data as DayEventData)
-        // Announce deaths
-        const dayData = event.data as DayEventData
-        if (dayData.deaths.length > 0) {
-          pushLocalMessage('system', `${dayData.deaths.length} personne(s) ont été tuées cette nuit...`, 'village', 'SYSTÈME', true)
+        // Announce deaths from recentDeaths (collected via DeathEvent)
+        const deaths = gameStore.recentDeaths
+        if (deaths.length > 0) {
+          const deathMessages = deaths.map(d => {
+            const player = gameStore.players.find(p => p.id === d.victim)
+            const roleName = ROLE_CONFIG[d.role]?.name || d.role
+            return `${player?.username || 'Inconnu'} (${roleName})`
+          })
+          pushLocalMessage('system', `Cette nuit: ${deathMessages.join(', ')}`, 'village', 'SYSTÈME', true)
         } else {
           pushLocalMessage('system', 'Personne n\'est mort cette nuit !', 'village', 'SYSTÈME', true)
         }
+        // Clear deaths after announcement
+        gameStore.clearRecentDeaths()
         break
       case EventTypeNight:
         gameStore.handleNightEvent()
