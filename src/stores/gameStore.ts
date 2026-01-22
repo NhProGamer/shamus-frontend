@@ -15,6 +15,8 @@ import type {
     SeerRevealEventData,
     PlayersDetailsData,
     Clan,
+    ErrorEventData,
+    AckEventData,
 } from '@/types/events'
 
 // ========================
@@ -67,6 +69,15 @@ export const useGameStore = defineStore('game', () => {
 
     // My revealed role (assigned at game start)
     const myRole = ref<RoleType | null>(null)
+
+    // Action loading states (tracks pending server responses)
+    const actionLoading = ref<Record<string, boolean>>({})
+
+    // Last error received (for UI feedback)
+    const lastError = ref<ErrorEventData | null>(null)
+
+    // Last ack received (for UI feedback)
+    const lastAck = ref<AckEventData | null>(null)
 
     // ========================
     // COMPUTED
@@ -250,6 +261,42 @@ export const useGameStore = defineStore('game', () => {
     }
 
     // ========================
+    // ACTIONS - Error/Ack Handlers
+    // ========================
+
+    function handleErrorEvent(data: ErrorEventData) {
+        lastError.value = data
+        // Clear loading state for the action that failed
+        if (data.action) {
+            actionLoading.value[data.action] = false
+        }
+    }
+
+    function handleAckEvent(data: AckEventData) {
+        lastAck.value = data
+        // Clear loading state for the acknowledged action
+        if (data.action) {
+            actionLoading.value[data.action] = false
+        }
+    }
+
+    function setActionLoading(action: string, loading: boolean) {
+        actionLoading.value[action] = loading
+    }
+
+    function isActionLoading(action: string): boolean {
+        return actionLoading.value[action] ?? false
+    }
+
+    function clearLastError() {
+        lastError.value = null
+    }
+
+    function clearLastAck() {
+        lastAck.value = null
+    }
+
+    // ========================
     // ACTIONS - UI Helpers
     // ========================
 
@@ -282,6 +329,9 @@ export const useGameStore = defineStore('game', () => {
         winData.value = null
         recentDeaths.value = []
         myRole.value = null
+        actionLoading.value = {}
+        lastError.value = null
+        lastAck.value = null
         resetVote()
     }
 
@@ -300,6 +350,9 @@ export const useGameStore = defineStore('game', () => {
         winData,
         recentDeaths,
         myRole,
+        actionLoading,
+        lastError,
+        lastAck,
 
         // Computed
         isHost,
@@ -335,6 +388,8 @@ export const useGameStore = defineStore('game', () => {
         handleWinEvent,
         handleRoleReveal,
         handleSeerReveal,
+        handleErrorEvent,
+        handleAckEvent,
 
         // Actions - UI helpers
         resetVote,
@@ -342,5 +397,9 @@ export const useGameStore = defineStore('game', () => {
         clearSeerReveal,
         clearRecentDeaths,
         resetStore,
+        setActionLoading,
+        isActionLoading,
+        clearLastError,
+        clearLastAck,
     }
 })
