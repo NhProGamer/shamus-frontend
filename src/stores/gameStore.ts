@@ -64,8 +64,12 @@ export const useGameStore = defineStore('game', () => {
     // Win state (game ended)
     const winData = ref<WinEventData | null>(null)
 
-    // Recent deaths (for announcements)
-    const recentDeaths = ref<PlayerID[]>([])
+    // Recent deaths (for announcements) - stores victim ID and their revealed role
+    interface DeathInfo {
+        victim: PlayerID;
+        role: RoleType;
+    }
+    const recentDeaths = ref<DeathInfo[]>([])
 
     // My revealed role (assigned at game start)
     const myRole = ref<RoleType | null>(null)
@@ -225,9 +229,10 @@ export const useGameStore = defineStore('game', () => {
         }
     }
 
-    function handleDayEvent(data: DayEventData) {
-        recentDeaths.value = data.deaths
-        // Clear night turn state
+    function handleDayEvent(_data: DayEventData) {
+        // DayEvent now only signals day start (day number)
+        // Deaths are received via individual DeathEvent before this
+        // Note: don't clear recentDeaths here - GameView needs them for announcement
         nightTurn.value = null
     }
 
@@ -238,10 +243,13 @@ export const useGameStore = defineStore('game', () => {
     }
 
     function handleDeathEvent(data: DeathEventData) {
-        // Update player state locally for immediate feedback
-        // The full game state will be updated via game_data event
-        if (!recentDeaths.value.includes(data.victim)) {
-            recentDeaths.value.push(data.victim)
+        // Add death with role for announcement
+        // Check if victim already in list to avoid duplicates
+        if (!recentDeaths.value.some(d => d.victim === data.victim)) {
+            recentDeaths.value.push({
+                victim: data.victim,
+                role: data.role
+            })
         }
     }
 
