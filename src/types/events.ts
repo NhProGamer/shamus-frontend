@@ -155,8 +155,9 @@ export interface VoteEventData {
 }
 
 // Day event data (server → client)
+// Note: Deaths are now sent as individual DeathEvent before this event
 export interface DayEventData {
-    deaths: PlayerID[];  // Players who died during the night
+    day: number;  // Current day number
 }
 
 // Night event data (server → client)
@@ -165,9 +166,10 @@ export interface NightEventData {
 }
 
 // Death event data (server → client)
+// Role is revealed when a player dies
 export interface DeathEventData {
-    killer?: PlayerID;
     victim: PlayerID;
+    role: RoleType;
 }
 
 // Win event data (server → client)
