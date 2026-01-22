@@ -827,9 +827,23 @@ onUnmounted(() => {
             Cimetière ({{ deadPlayers.length }})
           </h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div v-for="player in deadPlayers" :key="player.id" class="bg-[#150a1a] p-3 border-2 border-[#2a1d3a] flex justify-between items-center opacity-60">
-              <span class="text-gray-400 line-through">{{ player.username }}</span>
-              <span class="text-red-700">Mort</span>
+            <div v-for="player in deadPlayers" :key="player.id" class="bg-[#150a1a] p-3 border-2 border-[#2a1d3a] flex justify-between items-center opacity-70">
+              <div class="flex items-center gap-2">
+                <span class="text-gray-400 line-through">{{ player.username }}</span>
+                <span 
+                  v-if="player.role" 
+                  class="text-sm font-bold"
+                  :class="{
+                    'text-blue-400': player.role === 'villager',
+                    'text-red-500': player.role === 'werewolf',
+                    'text-purple-400': player.role === 'seer',
+                    'text-green-400': player.role === 'witch'
+                  }"
+                >
+                  {{ ROLE_CONFIG[player.role]?.name || player.role }}
+                </span>
+              </div>
+              <span class="text-red-700 text-sm">Mort</span>
             </div>
           </div>
         </div>
