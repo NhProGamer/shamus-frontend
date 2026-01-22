@@ -1,23 +1,16 @@
 import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
 
 const settings = {
-    authority: 'https://discord.com',
-    client_id: '678251890081005588',
+    authority: 'https://auth-shamus.nhsoul.fr/oidc',
+    client_id: 'alxcopl1qh6n85rrbkeyo',
     redirect_uri: `${window.location.origin}/oidc-callback`,
     response_type: 'code',
-    scope: 'openid guilds identify email',
+    scope: 'openid profile email',
     loadUserInfo: true,
     userStore: new WebStorageStateStore({ store: window.localStorage }),
 
     automaticSilentRenew: true,
     monitorSession: false,
-    metadata: {
-        issuer: 'https://discord.com',
-        authorization_endpoint: 'https://discord.com/api/oauth2/authorize',
-        token_endpoint: 'https://discord.com/api/oauth2/token',
-        userinfo_endpoint: 'https://discord.com/api/oauth2/userinfo',
-        jwks_uri: 'https://discord.com/api/oauth2/keys'
-    }
 };
 
 export const userManager = new UserManager(settings);

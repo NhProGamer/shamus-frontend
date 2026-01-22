@@ -19,6 +19,13 @@ import StartGameButton from "@/components/game/StartGameButton.vue"
 import VotePanel from "@/components/game/VotePanel.vue"
 import NightActionModal from "@/components/game/NightActionModal.vue"
 import WinModal from "@/components/game/WinModal.vue"
+import ToastNotification from "@/components/game/ToastNotification.vue"
+
+// Stores
+import { useNotificationStore } from '@/stores/notificationStore'
+
+// Utils
+import { getErrorMessage } from '@/utils/errorMessages'
 
 import {
   type ChatMessageEvent,
@@ -34,6 +41,8 @@ import {
   type WinEventData,
   type RoleRevealEventData,
   type SeerRevealEventData,
+  type ErrorEventData,
+  type AckEventData,
   EventChannelGameEvent,
   EventChannelSettings,
   EventChannelTimer,
@@ -54,6 +63,8 @@ import {
   EventTypeSeerAction,
   EventTypeWerewolfVote,
   EventTypeWitchAction,
+  EventTypeError,
+  EventTypeAck,
 } from "@/types/events.ts";
 
 // --- CONSTANTES ---
@@ -80,8 +91,9 @@ const route = useRoute()
 const showLoading = inject<() => void>('showLoading', () => {})
 const hideLoading = inject<() => void>('hideLoading', () => {})
 
-// --- PINIA STORE ---
+// --- PINIA STORES ---
 const gameStore = useGameStore()
+const notificationStore = useNotificationStore()
 const {
   game,
   timer,
@@ -328,6 +340,8 @@ const showSettingsError = (message: string) => {
 const sendStartGame = () => {
   if (!isHost.value || !isWaiting.value) return
   
+  gameStore.setActionLoading('start_game', true)
+  
   const event: Event<{}> = {
     channel: EventChannelGameEvent,
     type: EventTypeStartGame,
@@ -338,12 +352,15 @@ const sendStartGame = () => {
     send(JSON.stringify(event))
   } catch (e) {
     console.error('Erreur envoi start_game:', e)
+    gameStore.setActionLoading('start_game', false)
     pushLocalMessage('system', 'Erreur lors du lancement de la partie.', 'village', 'SYSTÈME', true)
   }
 }
 
 /** Village vote */
 const sendVillageVote = (targetId: PlayerID | null) => {
+  gameStore.setActionLoading('village_vote', true)
+  
   const event: Event<{ targetId: PlayerID | null }> = {
     channel: EventChannelGameEvent,
     type: EventTypeVillageVote,
@@ -354,12 +371,15 @@ const sendVillageVote = (targetId: PlayerID | null) => {
     send(JSON.stringify(event))
   } catch (e) {
     console.error('Erreur envoi village_vote:', e)
+    gameStore.setActionLoading('village_vote', false)
     pushLocalMessage('system', 'Erreur lors de l\'envoi du vote.', 'village', 'SYSTÈME', true)
   }
 }
 
 /** Seer action */
 const sendSeerAction = (targetId: PlayerID) => {
+  gameStore.setActionLoading('seer_action', true)
+  
   const event: Event<{ targetId: PlayerID }> = {
     channel: EventChannelGameEvent,
     type: EventTypeSeerAction,
@@ -370,11 +390,14 @@ const sendSeerAction = (targetId: PlayerID) => {
     send(JSON.stringify(event))
   } catch (e) {
     console.error('Erreur envoi seer_action:', e)
+    gameStore.setActionLoading('seer_action', false)
   }
 }
 
 /** Werewolf vote */
 const sendWerewolfVote = (targetId: PlayerID | null) => {
+  gameStore.setActionLoading('werewolf_vote', true)
+  
   const event: Event<{ targetId: PlayerID | null }> = {
     channel: EventChannelGameEvent,
     type: EventTypeWerewolfVote,
@@ -385,11 +408,14 @@ const sendWerewolfVote = (targetId: PlayerID | null) => {
     send(JSON.stringify(event))
   } catch (e) {
     console.error('Erreur envoi werewolf_vote:', e)
+    gameStore.setActionLoading('werewolf_vote', false)
   }
 }
 
 /** Witch action */
 const sendWitchAction = (healTargetId: PlayerID | undefined, poisonTargetId: PlayerID | undefined) => {
+  gameStore.setActionLoading('witch_action', true)
+  
   const event: Event<{ healTargetId?: PlayerID; poisonTargetId?: PlayerID }> = {
     channel: EventChannelGameEvent,
     type: EventTypeWitchAction,
@@ -400,6 +426,7 @@ const sendWitchAction = (healTargetId: PlayerID | undefined, poisonTargetId: Pla
     send(JSON.stringify(event))
   } catch (e) {
     console.error('Erreur envoi witch_action:', e)
+    gameStore.setActionLoading('witch_action', false)
   }
 }
 
@@ -465,6 +492,18 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         break
       case EventTypeTurn:
         gameStore.handleTurnEvent(event.data as TurnEventData)
+        break
+      case EventTypeError:
+        const errorData = event.data as ErrorEventData
+        gameStore.handleErrorEvent(errorData)
+        notificationStore.showError(getErrorMessage(errorData.code))
+        break
+      case EventTypeAck:
+        const ackData = event.data as AckEventData
+        gameStore.handleAckEvent(ackData)
+        if (ackData.message) {
+          notificationStore.showSuccess(ackData.message)
+        }
         break
       default:
         console.log("Event Game non géré:", event.type, event.data)
@@ -919,6 +958,9 @@ onUnmounted(() => {
       @close="handleWinModalClose"
       @play-again="handlePlayAgain"
     />
+
+    <!-- TOAST NOTIFICATIONS -->
+    <ToastNotification />
   </div>
 </template>
 
