@@ -93,7 +93,7 @@ export const useGameStore = defineStore('game', () => {
     })
 
     const isWaiting = computed(() => game.value?.status === 'waiting')
-    const isStarted = computed(() => game.value?.status === 'started')
+    const isStarted = computed(() => game.value?.status === 'active')
     const isEnded = computed(() => game.value?.status === 'ended')
 
     const currentPhase = computed(() => game.value?.phase ?? 'start')

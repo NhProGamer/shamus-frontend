@@ -3,7 +3,7 @@ import type {PlayerID} from "@/types/player.ts";
 
 export type GameID = string;
 export type GamePhase = 'start' | 'day' | 'night' | 'vote'
-export type GameStatus = 'waiting' | 'started' | 'ended'
+export type GameStatus = 'waiting' | 'active' | 'ended'
 
 export interface GameSettings {
     roles: Map<RoleType, number>
