@@ -17,6 +17,7 @@ import type {
     Clan,
     ErrorEventData,
     AckEventData,
+    HostChangeEventData,
 } from '@/types/events'
 
 // ========================
@@ -257,6 +258,12 @@ export const useGameStore = defineStore('game', () => {
         winData.value = data
     }
 
+    function handleHostChange(data: HostChangeEventData) {
+        if (game.value) {
+            game.value = { ...game.value, host: data.host }
+        }
+    }
+
     function handleRoleReveal(data: RoleRevealEventData) {
         // My role was revealed to me at game start
         myRole.value = data.role
@@ -394,6 +401,7 @@ export const useGameStore = defineStore('game', () => {
         handleNightEvent,
         handleDeathEvent,
         handleWinEvent,
+        handleHostChange,
         handleRoleReveal,
         handleSeerReveal,
         handleErrorEvent,

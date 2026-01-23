@@ -43,9 +43,11 @@ import {
   type SeerRevealEventData,
   type ErrorEventData,
   type AckEventData,
+  type HostChangeEventData,
   EventChannelGameEvent,
   EventChannelSettings,
   EventChannelTimer,
+  EventChannelConnexion,
   EventTypeChatMessage,
   EventTypeGameData,
   EventTypeGameSettings,
@@ -65,6 +67,7 @@ import {
   EventTypeWitchAction,
   EventTypeError,
   EventTypeAck,
+  EventTypeGameHostChange,
 } from "@/types/events.ts";
 
 // --- CONSTANTES ---
@@ -530,6 +533,17 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         break
       default:
         console.log("Event Timer non géré:", event.type, event.data)
+    }
+  } else if (event.channel === EventChannelConnexion) {
+    switch (event.type) {
+      case EventTypeGameHostChange:
+        gameStore.handleHostChange(event.data as HostChangeEventData)
+        const hostData = event.data as HostChangeEventData
+        const hostPlayer = gameStore.players.find(p => p.id === hostData.host)
+        pushLocalMessage('system', `${hostPlayer?.username || 'Un joueur'} est maintenant l'hôte.`, 'village', 'SYSTÈME', true)
+        break
+      default:
+        console.log("Event Connexion non géré:", event.type, event.data)
     }
   } else {
     // Autres channels si nécessaire
