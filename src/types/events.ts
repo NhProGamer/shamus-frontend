@@ -7,7 +7,7 @@ export type EventChannel = string;
 export type ConnectionState = string;
 
 // Clan types for win conditions
-export type Clan = 'werewolf' | 'villager' | 'lovers'
+export type Clan = 'werewolf' | 'villager' | 'lovers' | 'none'
 
 // Event channels
 export const EventChannelGameEvent: EventChannel = "game_event";
@@ -19,9 +19,9 @@ export const EventChannelTimer: EventChannel = "timer_event";
 export const EventTypeGameSettings: EventType = "settings";
 export const EventTypeGameData: EventType = "game_data";
 export const EventTypeChatMessage: EventType = "chat_message";
-export const EventTypeConnexion: EventType = "connexion";
-export const EventTypeDeconnexion: EventType = "deconnexion";
-export const EventTypeReconnexion: EventType = "reconnexion";
+export const EventTypeConnection: EventType = "connection";
+export const EventTypeDisconnection: EventType = "disconnection";
+export const EventTypeReconnection: EventType = "reconnection";
 export const EventTypeInactive: EventType = "inactive";
 export const EventTypeGameHostChange: EventType = "host_change";
 
@@ -75,7 +75,7 @@ export interface PlayersDetailsData {
     alive: boolean;
     role?: RoleType | null;
     target?: PlayerID | null;
-    connexion_state: ConnectionState;
+    connection_state: ConnectionState;
 }
 
 // Interface GameDataEventData
@@ -97,18 +97,18 @@ export interface ChatMessageEvent {
     channel: string;
 }
 
-// Interface ConnexionEvent
-export interface ConnexionEvent {
+// Interface ConnectionEvent
+export interface ConnectionEvent {
     player: PlayerID;
 }
 
-// Interface DeconnexionEvent
-export interface DeconnexionEvent {
+// Interface DisconnectionEvent
+export interface DisconnectionEvent {
     player: PlayerID;
 }
 
-// Interface ReconnexionEventData
-export interface ReconnexionEventData {
+// Interface ReconnectionEventData
+export interface ReconnectionEventData {
     player: PlayerID;
 }
 
@@ -264,9 +264,9 @@ export interface WitchActionData {
 export type GameSettingsEvent = Event<GameSettingsEventData>;
 export type GameDataEvent = Event<GameDataEventData>;
 export type ChatMessageEventType = Event<ChatMessageEvent>;
-export type ConnexionEventType = Event<ConnexionEvent>;
-export type DeconnexionEventType = Event<DeconnexionEvent>;
-export type ReconnexionEvent = Event<ReconnexionEventData>;
+export type ConnectionEventType = Event<ConnectionEvent>;
+export type DisconnectionEventType = Event<DisconnectionEvent>;
+export type ReconnectionEvent = Event<ReconnectionEventData>;
 export type InactiveEvent = Event<InactiveEventData>;
 export type HostChangeEvent = Event<HostChangeEventData>;
 
