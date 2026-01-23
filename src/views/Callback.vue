@@ -13,7 +13,7 @@ onMounted(async () => {
   try {
     const user = await userManager.signinCallback();
 
-    const targetPath = (user.state as any)?.path || '/play';
+    const targetPath = (user?.state as any)?.path || '/play';
 
     router.push(targetPath);
   } catch (err) {
