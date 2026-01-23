@@ -1,5 +1,5 @@
 export type MainTab = 'chat' | 'composition' | 'settings'
-export type ChatChannel = 'village' | 'loups' | 'amoureux'
+export type ChatChannel = 'village' | 'werewolf' | 'lovers'
 
 export interface ChatMessage {
   id: string

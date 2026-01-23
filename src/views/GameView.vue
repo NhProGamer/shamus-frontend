@@ -174,9 +174,9 @@ const newMessage = ref('')
 
 // --- COMPUTED: CHAT RESTRICTIONS ---
 const availableChannels = computed<ChatChannel[]>(() => {
-  // La nuit: seuls loups et amoureux peuvent parler dans leurs channels
+  // La nuit: seuls werewolf et lovers peuvent parler dans leurs channels
   if (isNight.value) {
-    return ['loups', 'amoureux']
+    return ['werewolf', 'lovers']
   }
   // Le jour (et phases start/vote): seul le village est ouvert
   return ['village']
@@ -744,15 +744,15 @@ onUnmounted(() => {
           <!-- Channels -->
           <div class="flex gap-2 mb-1">
             <button 
-                v-for="chan in ['village', 'loups', 'amoureux'] as const" 
+                v-for="chan in ['village', 'werewolf', 'lovers'] as const" 
                 :key="chan"
                 @click="availableChannels.includes(chan) && (currentChatChannel = chan)"
                 :disabled="!availableChannels.includes(chan)"
                 class="px-4 py-1 text-xl border-t-2 border-x-2 rounded-t-sm transition-all capitalize"
                 :class="{
                   'border-[#584c75] bg-[#2d2640] text-blue-200': currentChatChannel === chan && chan === 'village' && availableChannels.includes(chan),
-                  'border-[#991b1b] bg-[#3a0b0b] text-red-300': currentChatChannel === chan && chan === 'loups' && availableChannels.includes(chan),
-                  'border-[#d946ef] bg-[#381035] text-pink-300': currentChatChannel === chan && chan === 'amoureux' && availableChannels.includes(chan),
+                  'border-[#991b1b] bg-[#3a0b0b] text-red-300': currentChatChannel === chan && chan === 'werewolf' && availableChannels.includes(chan),
+                  'border-[#d946ef] bg-[#381035] text-pink-300': currentChatChannel === chan && chan === 'lovers' && availableChannels.includes(chan),
                   'border-transparent text-gray-500': currentChatChannel !== chan && availableChannels.includes(chan),
                   'opacity-40 cursor-not-allowed border-transparent text-gray-600': !availableChannels.includes(chan)
                 }"
@@ -775,8 +775,8 @@ onUnmounted(() => {
                 <span class="text-gray-500 text-base">[{{ msg.timestamp }}]</span>
                 <span class="text-xl font-bold whitespace-nowrap" :class="{
                   'text-blue-400': msg.channel === 'village',
-                  'text-red-500': msg.channel === 'loups',
-                  'text-pink-400': msg.channel === 'amoureux'
+                  'text-red-500': msg.channel === 'werewolf',
+                  'text-pink-400': msg.channel === 'lovers'
                 }">{{ msg.nickname }}:</span>
                 <span class="text-xl text-gray-200 break-words">{{ msg.message }}</span>
               </div>
