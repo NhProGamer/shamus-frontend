@@ -695,7 +695,7 @@ onUnmounted(() => {
   // Nettoyer les timeouts
   if (settingsDebounceTimeout) clearTimeout(settingsDebounceTimeout)
   if (settingsErrorTimeout) clearTimeout(settingsErrorTimeout)
-  // Reset store
+  // Reset store (also stops timer tick interval)
   gameStore.resetStore()
 })
 </script>

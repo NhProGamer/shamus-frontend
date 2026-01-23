@@ -29,6 +29,9 @@ export const useGameStore = defineStore('game', () => {
     // STATE
     // ========================
 
+    // Timer interval for client-side countdown (not reactive, just a handle)
+    let timerIntervalId: ReturnType<typeof setInterval> | null = null
+
     // Current user
     const currentUserId = ref<string | null>(null)
 
@@ -183,8 +186,10 @@ export const useGameStore = defineStore('game', () => {
 
     function handleTimerEvent(data: TimerEventData) {
         if (data.status === 'expired' || data.status === 'skipped') {
+            stopTimerTick()
             timer.value = null
         } else {
+            // Sync with server value
             timer.value = {
                 phase: data.phase,
                 roleType: data.roleType,
@@ -192,6 +197,8 @@ export const useGameStore = defineStore('game', () => {
                 remaining: data.remaining,
                 active: true,
             }
+            // Start/restart client-side countdown
+            startTimerTick()
         }
     }
 
@@ -312,6 +319,35 @@ export const useGameStore = defineStore('game', () => {
     }
 
     // ========================
+    // ACTIONS - Timer Tick (Client-side countdown)
+    // ========================
+
+    function startTimerTick() {
+        // Clear any existing interval first
+        stopTimerTick()
+
+        // Start countdown interval (decrement every second)
+        timerIntervalId = setInterval(() => {
+            if (timer.value && timer.value.remaining > 0) {
+                timer.value = {
+                    ...timer.value,
+                    remaining: timer.value.remaining - 1
+                }
+            } else {
+                // Stop when timer reaches 0
+                stopTimerTick()
+            }
+        }, 1000)
+    }
+
+    function stopTimerTick() {
+        if (timerIntervalId) {
+            clearInterval(timerIntervalId)
+            timerIntervalId = null
+        }
+    }
+
+    // ========================
     // ACTIONS - UI Helpers
     // ========================
 
@@ -336,6 +372,7 @@ export const useGameStore = defineStore('game', () => {
     }
 
     function resetStore() {
+        stopTimerTick()
         currentUserId.value = null
         game.value = null
         timer.value = null
@@ -417,5 +454,6 @@ export const useGameStore = defineStore('game', () => {
         isActionLoading,
         clearLastError,
         clearLastAck,
+        stopTimerTick,
     }
 })
