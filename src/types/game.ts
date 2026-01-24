@@ -1,13 +1,13 @@
 import type {RoleType} from "@/types/roles.ts";
 import type {PlayerID} from "@/types/player.ts";
+import type {GameSettings} from "@/types/events.ts";
 
 export type GameID = string;
 export type GamePhase = 'start' | 'day' | 'night' | 'vote'
 export type GameStatus = 'waiting' | 'active' | 'ended'
 
-export interface GameSettings {
-    roles: Map<RoleType, number>
-}
+// Note: GameSettings is defined in events.ts to match backend JSON structure
+// It uses Record<RoleType, number> for proper JSON serialization
 
 export interface Game {
     id: GameID
