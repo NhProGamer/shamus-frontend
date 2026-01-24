@@ -8,6 +8,7 @@ import { useGameStore } from '@/stores/gameStore'
 import {
   type MainTab,
   type ChatChannel,
+  type UIMessage,
 } from "@/types/ui.ts"
 import type { RoleType } from "@/types/roles.ts"
 import type { PlayerID } from "@/types/player.ts"
@@ -203,11 +204,6 @@ const chatPlaceholder = computed(() => {
 })
 
 // Extension locale pour l'affichage (ajout ID, timestamp, isSystem)
-type UIMessage = ChatMessageEvent & {
-  id: string
-  isSystem: boolean
-  timestamp: string
-}
 
 const messages = ref<UIMessage[]>([])
 const scrollContainer = ref<HTMLDivElement | null>(null)

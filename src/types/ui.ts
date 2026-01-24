@@ -1,3 +1,5 @@
+import type { ChatMessageEvent } from './events'
+
 export type MainTab = 'chat' | 'composition' | 'settings'
 export type ChatChannel = 'village' | 'werewolf' | 'lovers'
 
@@ -8,4 +10,14 @@ export interface ChatMessage {
   channel: ChatChannel
   timestamp: string
   isSystem?: boolean
+}
+
+/**
+ * Extended chat message type for UI rendering
+ * Combines server ChatMessageEvent with client-side UI metadata
+ */
+export type UIMessage = ChatMessageEvent & {
+  id: string
+  isSystem: boolean
+  timestamp: string
 }
