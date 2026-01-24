@@ -69,11 +69,8 @@ export const useGameStore = defineStore('game', () => {
     const winData = ref<WinEventData | null>(null)
 
     // Recent deaths (for announcements) - stores victim ID and their revealed role
-    interface DeathInfo {
-        victim: PlayerID;
-        role: RoleType;
-    }
-    const recentDeaths = ref<DeathInfo[]>([])
+    // Uses DeathEventData from events.ts
+    const recentDeaths = ref<DeathEventData[]>([])
 
     // My revealed role (assigned at game start)
     const myRole = ref<RoleType | null>(null)
