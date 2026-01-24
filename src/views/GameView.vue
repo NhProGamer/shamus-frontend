@@ -9,9 +9,9 @@ import {
   type MainTab,
   type ChatChannel,
   type UIMessage,
-} from "@/types/ui.ts"
-import type { RoleType } from "@/types/roles.ts"
-import type { PlayerID } from "@/types/player.ts"
+} from "@/types/ui"
+import type { RoleType } from "@/types/roles"
+import type { PlayerID } from "@/types/player"
 import ErrorDisplay from "@/components/ErrorDisplay.vue"
 
 // Game components
@@ -69,7 +69,7 @@ import {
   EventTypeError,
   EventTypeAck,
   EventTypeGameHostChange,
-} from "@/types/events.ts";
+} from "@/types/events"
 
 // --- CONSTANTES ---
 const MAX_MSG_LENGTH = 500

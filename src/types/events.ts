@@ -1,6 +1,6 @@
-import type { PlayerID } from "@/types/player.ts";
-import type { GameID, GamePhase, GameStatus } from "@/types/game.ts";
-import type { RoleType } from "@/types/roles.ts";
+import type { PlayerID } from "@/types/player"
+import type { GameID, GamePhase, GameStatus } from "@/types/game"
+import type { RoleType } from "@/types/roles"
 
 // Strict type definitions for type safety
 export type EventType = 

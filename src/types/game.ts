@@ -1,6 +1,6 @@
-import type {RoleType} from "@/types/roles.ts";
-import type {PlayerID} from "@/types/player.ts";
-import type {GameSettings} from "@/types/events.ts";
+import type {RoleType} from "@/types/roles"
+import type {PlayerID} from "@/types/player"
+import type {GameSettings} from "@/types/events"
 
 export type GameID = string;
 export type GamePhase = 'start' | 'day' | 'night' | 'vote'
