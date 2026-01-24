@@ -2,9 +2,36 @@ import type { PlayerID } from "@/types/player.ts";
 import type { GameID, GamePhase, GameStatus } from "@/types/game.ts";
 import type { RoleType } from "@/types/roles.ts";
 
-export type EventType = string;
-export type EventChannel = string;
-export type ConnectionState = string;
+// Strict type definitions for type safety
+export type EventType = 
+    | 'settings' 
+    | 'game_data' 
+    | 'chat_message' 
+    | 'connection'
+    | 'disconnection'
+    | 'reconnection'
+    | 'inactive'
+    | 'host_change'
+    | 'timer' 
+    | 'turn' 
+    | 'vote' 
+    | 'day' 
+    | 'night' 
+    | 'death' 
+    | 'win' 
+    | 'role_reveal' 
+    | 'seer_reveal'
+    | 'error' 
+    | 'ack'
+    | 'start_game'
+    | 'village_vote'
+    | 'seer_action'
+    | 'werewolf_vote'
+    | 'witch_action';
+
+export type EventChannel = 'game_event' | 'conn_event' | 'settings_event' | 'timer_event';
+
+export type ConnectionState = 'connected' | 'disconnected' | 'reconnecting';
 
 // Clan types for win conditions
 export type Clan = 'werewolf' | 'villager' | 'lovers' | 'none'
