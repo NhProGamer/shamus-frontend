@@ -8,9 +8,15 @@ const router = useRouter()
 const gameCode = ref('')
 
 const handleJoin = () => {
-  if (gameCode.value.length < 3) return
-  console.log('Rejoindre la partie:', gameCode.value)
-  // router.push(`/lobby/${gameCode.value}`)
+  const code = gameCode.value.trim()
+  if (code.length < 3) {
+    console.error('Code trop court')
+    return
+  }
+  
+  console.log('Rejoindre la partie:', code)
+  // Navigate to game with the provided game ID
+  router.push(`/game?gameID=${code}`)
 }
 
 const handleCreate = async () => {
