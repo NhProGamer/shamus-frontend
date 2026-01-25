@@ -1029,13 +1029,16 @@ onUnmounted(() => {
           <!-- My Role Display (when game started) -->
           <div v-if="isStarted && myRole" class="my-role-section p-4 bg-gradient-to-r from-purple-900/50 to-purple-800/30 border border-purple-700 rounded-lg">
             <h3 class="text-xl text-purple-300 mb-2">Votre Rôle</h3>
-            <p class="text-3xl font-bold" :class="{
+            <p v-if="!streamerMode" class="text-3xl font-bold" :class="{
               'text-blue-400': myRole === 'villager',
               'text-red-500': myRole === 'werewolf',
               'text-purple-400': myRole === 'seer',
               'text-green-400': myRole === 'witch'
             }">
               {{ ROLE_CONFIG[myRole]?.name || myRole }}
+            </p>
+            <p v-else class="text-3xl font-bold text-gray-500 blur-sm select-none">
+              ████████
             </p>
           </div>
           
@@ -1059,6 +1062,7 @@ onUnmounted(() => {
 
     <!-- NIGHT ACTION MODAL -->
     <NightActionModal 
+      :streamer-mode="streamerMode"
       @seer-action="sendSeerAction"
       @werewolf-vote="sendWerewolfVote"
       @witch-action="sendWitchAction"

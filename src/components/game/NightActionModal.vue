@@ -7,6 +7,14 @@ import type { PlayersDetailsData } from '@/types/events'
 import PixelModal from '@/components/ui/PixelModal.vue'
 import PixelButton from '@/components/ui/PixelButton.vue'
 
+// Props
+const props = defineProps<{
+    streamerMode?: boolean
+}>()
+
+// Computed from props
+const isStreamerMode = computed(() => props.streamerMode ?? false)
+
 const emit = defineEmits<{
     (e: 'seer-action', targetId: PlayerID): void
     (e: 'werewolf-vote', targetId: PlayerID | null): void
@@ -147,6 +155,7 @@ function closeReveal() {
                 Le role de <span class="font-bold text-white">{{ revealedPlayerName }}</span> est :
             </p>
             <div 
+                v-if="!isStreamerMode"
                 class="role-reveal text-4xl font-bold py-6 pixel-inset"
                 :class="{
                     'bg-red-900/50 text-red-400': seerReveal.roleType === 'werewolf',
@@ -154,6 +163,12 @@ function closeReveal() {
                 }"
             >
                 {{ revealedRoleName }}
+            </div>
+            <div 
+                v-else
+                class="role-reveal text-4xl font-bold py-6 pixel-inset bg-gray-900/50 text-gray-500 blur-sm select-none"
+            >
+                ████████
             </div>
             <PixelButton 
                 @click="closeReveal"
