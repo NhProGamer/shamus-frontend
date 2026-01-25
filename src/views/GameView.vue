@@ -237,15 +237,31 @@ const canSendToCurrentChannel = computed(() => {
 })
 
 const chatPlaceholder = computed(() => {
+  // Not connected
   if (connectionStatus.value !== 'open') {
     return 'Connexion en cours...'
   }
-  if (!canSendToCurrentChannel.value) {
-    if (isNight.value && currentChatChannel.value === 'village') {
-      return 'Le village dort... Silence !'
-    }
-    return 'Ce channel est fermé pendant le jour.'
+  
+  // Dead players cannot send
+  if (!isAlive.value) {
+    return 'Les morts ne peuvent pas parler...'
   }
+  
+  // Cannot send to current channel
+  if (!canSendToCurrentChannel.value) {
+    switch (currentChatChannel.value) {
+      case 'village':
+        return 'Le village dort... (lecture seule)'
+      case 'werewolf':
+        return 'Les loups-garous ne peuvent parler que la nuit'
+      case 'lovers':
+        return 'Channel non disponible'
+      default:
+        return 'Channel fermé'
+    }
+  }
+  
+  // Can send
   return 'Écrivez votre message...'
 })
 
