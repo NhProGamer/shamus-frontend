@@ -209,8 +209,31 @@ const availableChannels = computed<ChatChannel[]>(() => {
   return channels
 })
 
+// Can the player SEND messages to the current channel?
+// Visibility (availableChannels) != Permission to send (canSendToCurrentChannel)
 const canSendToCurrentChannel = computed(() => {
-  return availableChannels.value.includes(currentChatChannel.value)
+  // Dead players cannot send messages (backend rule)
+  if (!isAlive.value) return false
+  
+  // Check permissions based on channel and game phase
+  switch (currentChatChannel.value) {
+    case 'village':
+      // Village: only during day phases (Day/Vote/Start)
+      // Aligns with backend: helpers.IsDayPhase(gamePhase)
+      return currentPhase.value === 'day' || currentPhase.value === 'vote' || currentPhase.value === 'start'
+    
+    case 'werewolf':
+      // Werewolf: only during night AND must be a werewolf
+      // Aligns with backend: gamePhase == entities.PhaseNight && helpers.IsWerewolf(sender)
+      return isNight.value && myRole.value === 'werewolf'
+    
+    case 'lovers':
+      // Lovers: not implemented yet (Cupid missing)
+      return false
+    
+    default:
+      return false
+  }
 })
 
 const chatPlaceholder = computed(() => {
