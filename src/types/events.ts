@@ -31,7 +31,7 @@ export type EventType =
 
 export type EventChannel = 'game_event' | 'conn_event' | 'settings_event' | 'timer_event';
 
-export type ConnectionState = 'connected' | 'disconnected' | 'reconnecting';
+export type ConnectionState = 'connected' | 'disconnected' | 'reconnecting' | 'inactive';
 
 // Clan types for win conditions
 export type Clan = 'werewolf' | 'villager' | 'lovers' | 'none'
