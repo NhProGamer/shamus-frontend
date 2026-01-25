@@ -387,6 +387,19 @@ const sendStartGame = () => {
 
 /** Village vote */
 const sendVillageVote = (targetId: PlayerID | null) => {
+  // Find target player name for confirmation
+  let confirmMessage = 'Êtes-vous sûr de vouloir vous abstenir ?'
+  if (targetId) {
+    const targetPlayer = gameStore.players.find(p => p.id === targetId)
+    const targetName = targetPlayer?.username || 'ce joueur'
+    confirmMessage = `Êtes-vous sûr de vouloir voter contre ${targetName} ?`
+  }
+  
+  // Ask for confirmation
+  if (!confirm(confirmMessage)) {
+    return
+  }
+  
   gameStore.setActionLoading('village_vote', true)
   
   const event: Event<{ targetId: PlayerID | null }> = {
