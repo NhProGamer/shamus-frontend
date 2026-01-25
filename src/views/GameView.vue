@@ -90,6 +90,10 @@ const STATUS_LABELS: Record<WebSocketStatus, string> = {
   'error': 'Erreur'
 }
 
+// Game constants (from backend)
+const MIN_PLAYERS = 4
+const MAX_PLAYERS = 24
+
 // Configuration des rôles (extensible)
 const ROLE_CONFIG: Record<RoleType, { name: string; color: string; maxCount?: number }> = {
   villager: { name: 'Villageois', color: 'text-blue-400' },
@@ -297,8 +301,23 @@ const updateRoleCount = (roleType: RoleType, delta: number) => {
   const currentCount = baseRoles[roleType] || 0
   const newCount = Math.max(0, currentCount + delta)
 
-  // Mise à jour locale immédiate pour un feedback instantané
+  // Validation: vérifier la limite du rôle
+  const roleLimit = ROLE_CONFIG[roleType]?.maxCount
+  if (roleLimit && newCount > roleLimit) {
+    showSettingsError(`Maximum ${roleLimit} ${ROLE_CONFIG[roleType].name} autorisé(e)`)
+    return
+  }
+
+  // Validation: vérifier le total des rôles
   const newRoles = { ...baseRoles, [roleType]: newCount }
+  const totalRoles = Object.values(newRoles).reduce((sum, count) => sum + count, 0)
+  
+  if (totalRoles > MAX_PLAYERS) {
+    showSettingsError(`Maximum ${MAX_PLAYERS} rôles au total`)
+    return
+  }
+
+  // Mise à jour locale immédiate pour un feedback instantané
   pendingRoles.value = newRoles
 
   // Appliquer aussi à l'état local pour affichage immédiat
@@ -944,6 +963,12 @@ onUnmounted(() => {
             <div v-if="isHost" class="inline-flex items-center gap-2 px-3 py-1 bg-yellow-900/30 border border-yellow-700 text-yellow-400 text-sm">
               <span>★</span> Vous êtes l'hôte
               <span v-if="!isWaiting" class="text-yellow-600">(modifications désactivées)</span>
+            </div>
+
+            <!-- Game limits info -->
+            <div class="text-sm text-gray-400 bg-[#1a1025] p-3 border-l-2 border-purple-700">
+              <p>Limites de jeu : {{ MIN_PLAYERS }}-{{ MAX_PLAYERS }} joueurs</p>
+              <p class="mt-1">Voyante et Sorcière : maximum 1 de chaque</p>
             </div>
 
             <!-- Message d'erreur serveur -->
