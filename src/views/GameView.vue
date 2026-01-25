@@ -45,6 +45,10 @@ import {
   type ErrorEventData,
   type AckEventData,
   type HostChangeEventData,
+  type ConnectionEvent,
+  type DisconnectionEvent,
+  type ReconnectionEventData,
+  type InactiveEventData,
   EventChannelGameEvent,
   EventChannelSettings,
   EventChannelTimer,
@@ -69,6 +73,10 @@ import {
   EventTypeError,
   EventTypeAck,
   EventTypeGameHostChange,
+  EventTypeConnection,
+  EventTypeDisconnection,
+  EventTypeReconnection,
+  EventTypeInactive,
 } from "@/types/events"
 
 // --- CONSTANTES ---
@@ -538,6 +546,31 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         const hostPlayer = gameStore.players.find(p => p.id === hostData.host)
         pushLocalMessage('system', `${hostPlayer?.username || 'Un joueur'} est maintenant l'hôte.`, 'village', 'SYSTÈME', true)
         break
+      case EventTypeConnection:
+        // Player connected - refresh game data to update connection states
+        handleGameData(gameStore.game!)
+        const connData = event.data as ConnectionEvent
+        const connPlayer = gameStore.players.find(p => p.id === connData.player)
+        pushLocalMessage('system', `${connPlayer?.username || 'Un joueur'} s'est connecté.`, 'village', 'SYSTÈME', true)
+        break
+      case EventTypeDisconnection:
+        handleGameData(gameStore.game!)
+        const discData = event.data as DisconnectionEvent
+        const discPlayer = gameStore.players.find(p => p.id === discData.player)
+        pushLocalMessage('system', `${discPlayer?.username || 'Un joueur'} s'est déconnecté.`, 'village', 'SYSTÈME', true)
+        break
+      case EventTypeReconnection:
+        handleGameData(gameStore.game!)
+        const reconData = event.data as ReconnectionEventData
+        const reconPlayer = gameStore.players.find(p => p.id === reconData.player)
+        pushLocalMessage('system', `${reconPlayer?.username || 'Un joueur'} s'est reconnecté.`, 'village', 'SYSTÈME', true)
+        break
+      case EventTypeInactive:
+        handleGameData(gameStore.game!)
+        const inactData = event.data as InactiveEventData
+        const inactPlayer = gameStore.players.find(p => p.id === inactData.player)
+        pushLocalMessage('system', `${inactPlayer?.username || 'Un joueur'} est maintenant inactif.`, 'village', 'SYSTÈME', true)
+        break
       default:
         console.log("Event Connexion non géré:", event.type, event.data)
     }
@@ -827,7 +860,19 @@ onUnmounted(() => {
           </h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div v-for="player in livingPlayers" :key="player.id" class="bg-[#1e1b29] p-3 border-2 border-[#584c75] flex justify-between items-center">
-              <span class="text-xl text-white">{{ player.username }}</span>
+              <div class="flex items-center gap-2">
+                <!-- Connection status indicator -->
+                <div 
+                  class="w-3 h-3 rounded-full"
+                  :class="{
+                    'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]': player.connection_state === 'connected',
+                    'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.8)]': player.connection_state === 'disconnected',
+                    'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]': player.connection_state === 'inactive'
+                  }"
+                  :title="player.connection_state === 'connected' ? 'Connecté' : player.connection_state === 'disconnected' ? 'Déconnecté' : 'Inactif'"
+                ></div>
+                <span class="text-xl text-white">{{ player.username }}</span>
+              </div>
               <span class="text-green-500">Vivant</span>
             </div>
           </div>
@@ -839,6 +884,16 @@ onUnmounted(() => {
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div v-for="player in deadPlayers" :key="player.id" class="bg-[#150a1a] p-3 border-2 border-[#2a1d3a] flex justify-between items-center opacity-70">
               <div class="flex items-center gap-2">
+                <!-- Connection status indicator for dead players -->
+                <div 
+                  class="w-3 h-3 rounded-full"
+                  :class="{
+                    'bg-green-500/50': player.connection_state === 'connected',
+                    'bg-orange-500/50': player.connection_state === 'disconnected',
+                    'bg-red-500/50': player.connection_state === 'inactive'
+                  }"
+                  :title="player.connection_state === 'connected' ? 'Connecté' : player.connection_state === 'disconnected' ? 'Déconnecté' : 'Inactif'"
+                ></div>
                 <span class="text-gray-400 line-through">{{ player.username }}</span>
                 <span 
                   v-if="player.role" 
