@@ -191,13 +191,22 @@ const currentChatChannel = ref<ChatChannel>('village')
 const newMessage = ref('')
 
 // --- COMPUTED: CHAT RESTRICTIONS ---
+// Available channels based on player ROLE (not phase)
 const availableChannels = computed<ChatChannel[]>(() => {
-  // La nuit: seuls werewolf et lovers peuvent parler dans leurs channels
-  if (isNight.value) {
-    return ['werewolf', 'lovers']
+  const channels: ChatChannel[] = ['village'] // Always visible to everyone
+  
+  // Werewolf channel: only for werewolves
+  if (myRole.value === 'werewolf') {
+    channels.push('werewolf')
   }
-  // Le jour (et phases start/vote): seul le village est ouvert
-  return ['village']
+  
+  // Lovers channel: TODO - implement when Cupid role is added
+  // Currently not functional as Cupid is not implemented in backend
+  // if (hasLoversClan.value) {
+  //   channels.push('lovers')
+  // }
+  
+  return channels
 })
 
 const canSendToCurrentChannel = computed(() => {
