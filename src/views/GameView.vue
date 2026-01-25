@@ -687,8 +687,12 @@ const handleWinModalClose = () => {
 }
 
 const handlePlayAgain = () => {
-  // TODO: Implement play again logic (create new game or return to lobby)
-  console.log('Play again requested')
+  // Close current game connection
+  close(1000, 'Starting new game')
+  // Reset store
+  gameStore.resetStore()
+  // Navigate to play view to create a new game
+  router.push('/play')
 }
 
 // --- INITIALISATION & LIFECYCLE ---
