@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, inject, onUnmounted, watch, shallowRef } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useWebSocket, type WebSocketMessage, type WebSocketStatus, type UseWebSocketReturn } from "@/composables/useWebSocket"
 import { userManager } from '@/oidc'
@@ -104,6 +104,7 @@ const ROLE_CONFIG: Record<RoleType, { name: string; color: string; maxCount?: nu
 
 // --- INJECTIONS ---
 const route = useRoute()
+const router = useRouter()
 const showLoading = inject<() => void>('showLoading', () => {})
 const hideLoading = inject<() => void>('hideLoading', () => {})
 
@@ -650,6 +651,17 @@ const toggleStreamerMode = () => {
   pushLocalMessage('system', `Mode Streamer ${streamerMode.value ? 'activé' : 'désactivé'}.`, 'village', 'SYSTÈME', true)
 }
 
+const handleLeaveGame = () => {
+  if (confirm('Êtes-vous sûr de vouloir quitter cette partie ?')) {
+    // Close WebSocket connection
+    close(1000, 'Player left game')
+    // Reset store
+    gameStore.resetStore()
+    // Navigate to play view
+    router.push('/play')
+  }
+}
+
 // ========================
 // WIN MODAL HANDLERS
 // ========================
@@ -1050,9 +1062,13 @@ onUnmounted(() => {
             <span class="text-2xl text-gray-300">Mode Streamer (Cacher rôles)</span>
           </div>
 
-          <div class="mt-auto">
-            <button @click="reconnect()" class="btn-pixel-secondary px-6 py-2 text-xl w-full md:w-auto" :disabled="connectionStatus === 'connecting'">
+          <div class="mt-auto space-y-3">
+            <button @click="reconnect()" class="btn-pixel-secondary px-6 py-2 text-xl w-full" :disabled="connectionStatus === 'connecting'">
               {{ connectionStatus === 'connecting' ? 'Connexion...' : 'Forcer la reconnexion' }}
+            </button>
+            
+            <button @click="handleLeaveGame" class="px-6 py-2 text-xl w-full bg-red-900 border-2 border-red-700 text-red-200 hover:bg-red-800 transition-colors">
+              Quitter la partie
             </button>
           </div>
         </div>
