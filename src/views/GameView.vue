@@ -920,7 +920,7 @@ onUnmounted(() => {
                 :key="chan"
                 @click="availableChannels.includes(chan) && (currentChatChannel = chan)"
                 :disabled="!availableChannels.includes(chan)"
-                class="px-4 py-1 text-xl border-t-2 border-x-2 rounded-t-sm transition-all capitalize"
+                class="px-4 py-1 text-xl border-t-2 border-x-2 rounded-t-sm transition-all capitalize relative"
                 :class="{
                   'border-[#584c75] bg-[#2d2640] text-blue-200': currentChatChannel === chan && chan === 'village' && availableChannels.includes(chan),
                   'border-[#991b1b] bg-[#3a0b0b] text-red-300': currentChatChannel === chan && chan === 'werewolf' && availableChannels.includes(chan),
@@ -929,7 +929,16 @@ onUnmounted(() => {
                   'opacity-40 cursor-not-allowed border-transparent text-gray-600': !availableChannels.includes(chan)
                 }"
             >
-              {{ chan }}
+              <span class="flex items-center gap-2">
+                {{ chan }}
+                <!-- Read-only indicator for village at night -->
+                <span 
+                  v-if="chan === 'village' && currentChatChannel === chan && !canSendToCurrentChannel" 
+                  class="text-xs text-yellow-400 bg-yellow-900/50 px-2 py-0.5 rounded"
+                >
+                  👁️ lecture
+                </span>
+              </span>
             </button>
           </div>
 
