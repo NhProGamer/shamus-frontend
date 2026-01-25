@@ -102,8 +102,12 @@ const isLow = computed(() => (timer.value?.remaining ?? 0) <= 10)
         </div>
 
         <!-- Role indicator (night phase) -->
-        <div v-if="roleText" class="role-indicator text-sm text-gray-300 italic hidden md:block">
-            {{ roleText }}
+        <div v-if="roleText" class="role-indicator flex items-center gap-2 px-2 py-1 bg-black/30 rounded text-sm font-bold">
+            <!-- Icon based on role -->
+            <span v-if="timer?.roleType === 'seer'">🔮</span>
+            <span v-else-if="timer?.roleType === 'werewolf'">🐺</span>
+            <span v-else-if="timer?.roleType === 'witch'">🧪</span>
+            <span class="text-white">{{ roleText }}</span>
         </div>
 
         <!-- Timer display -->
