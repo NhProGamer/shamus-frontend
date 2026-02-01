@@ -19,6 +19,12 @@ import type {
     AckEventData,
     HostChangeEventData,
 } from '@/types/events'
+import type {
+    ActionCreatedEventData,
+    ActionExpiredEventData,
+    ActionState,
+    ActionID,
+} from '@/types/actions'
 
 // ========================
 // GAME STORE
@@ -83,6 +89,13 @@ export const useGameStore = defineStore('game', () => {
 
     // Last ack received (for UI feedback)
     const lastAck = ref<AckEventData | null>(null)
+
+    // ========================
+    // NEW: Action System State
+    // ========================
+
+    // Pending actions (NEW action system)
+    const pendingActions = ref<Map<ActionID, ActionState>>(new Map())
 
     // ========================
     // COMPUTED
@@ -164,6 +177,30 @@ export const useGameStore = defineStore('game', () => {
     })
 
     // ========================
+    // NEW: Action System Computed
+    // ========================
+
+    // Check if any action is currently active
+    const hasActiveAction = computed(() => {
+        return Array.from(pendingActions.value.values()).some(
+            action => action.status === 'pending' && action.remainingSeconds > 0
+        )
+    })
+
+    // Get all active actions
+    const activeActions = computed(() => {
+        return Array.from(pendingActions.value.values()).filter(
+            action => action.status === 'pending' && action.remainingSeconds > 0
+        )
+    })
+
+    // Get the current action (first pending action, if any)
+    const currentAction = computed((): ActionState | null => {
+        const active = activeActions.value
+        return active.length > 0 ? active[0] : null
+    })
+
+    // ========================
     // ACTIONS - Event Handlers
     // ========================
 
@@ -200,6 +237,14 @@ export const useGameStore = defineStore('game', () => {
     }
 
     function handleTurnEvent(data: TurnEventData) {
+        console.log('[gameStore] handleTurnEvent received:', {
+            roleType: data.roleType,
+            targetPlayerId: data.targetPlayerId,
+            canHeal: data.canHeal,
+            canPoison: data.canPoison,
+            fullData: data
+        })
+        
         nightTurn.value = data
         // Clear any previous seer reveal
         if (data.roleType === 'seer') {
@@ -277,6 +322,62 @@ export const useGameStore = defineStore('game', () => {
         seerReveal.value = data
         // Clear the turn after action completed
         nightTurn.value = null
+    }
+
+    // ========================
+    // NEW: Action System Event Handlers
+    // ========================
+
+    function handleActionCreated(data: ActionCreatedEventData) {
+        const { actionId, type, payload, expiresAt, timeout } = data
+
+        console.log(`[gameStore] Action created: ${actionId} (type: ${type}, timeout: ${timeout}s)`)
+
+        // Create action state
+        const actionState: ActionState = {
+            actionId,
+            type,
+            payload,
+            expiresAt: new Date(expiresAt),
+            timeoutSeconds: timeout,
+            remainingSeconds: timeout,
+            status: 'pending',
+        }
+
+        // Add to map
+        pendingActions.value.set(actionId, actionState)
+    }
+
+    function handleActionExpired(data: ActionExpiredEventData) {
+        const { actionId, type } = data
+
+        console.log(`[gameStore] Action expired: ${actionId} (type: ${type})`)
+
+        const action = pendingActions.value.get(actionId)
+        if (action) {
+            action.status = 'expired'
+            action.remainingSeconds = 0
+        }
+    }
+
+    function markActionCompleted(actionId: ActionID, response?: any) {
+        console.log(`[gameStore] Action completed: ${actionId}`)
+
+        const action = pendingActions.value.get(actionId)
+        if (action) {
+            action.status = 'completed'
+            action.response = response
+        }
+    }
+
+    function clearAction(actionId: ActionID) {
+        console.log(`[gameStore] Clearing action: ${actionId}`)
+        pendingActions.value.delete(actionId)
+    }
+
+    function clearAllActions() {
+        console.log('[gameStore] Clearing all actions')
+        pendingActions.value.clear()
     }
 
     // ========================
@@ -382,6 +483,7 @@ export const useGameStore = defineStore('game', () => {
         lastError.value = null
         lastAck.value = null
         resetVote()
+        clearAllActions() // NEW: Clear action system state
     }
 
     // ========================
@@ -402,6 +504,7 @@ export const useGameStore = defineStore('game', () => {
         actionLoading,
         lastError,
         lastAck,
+        pendingActions, // NEW
 
         // Computed
         isHost,
@@ -424,6 +527,9 @@ export const useGameStore = defineStore('game', () => {
         isMyTurn,
         eligibleTargets,
         voteCounts,
+        hasActiveAction, // NEW
+        activeActions, // NEW
+        currentAction, // NEW
 
         // Actions - Event handlers
         setCurrentUserId,
@@ -440,6 +546,8 @@ export const useGameStore = defineStore('game', () => {
         handleSeerReveal,
         handleErrorEvent,
         handleAckEvent,
+        handleActionCreated, // NEW
+        handleActionExpired, // NEW
 
         // Actions - UI helpers
         resetVote,
@@ -452,5 +560,8 @@ export const useGameStore = defineStore('game', () => {
         clearLastError,
         clearLastAck,
         stopTimerTick,
+        markActionCompleted, // NEW
+        clearAction, // NEW
+        clearAllActions, // NEW
     }
 })
