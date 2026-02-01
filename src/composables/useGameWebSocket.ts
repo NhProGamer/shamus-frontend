@@ -13,14 +13,22 @@ import type {
   WitchActionData,
 } from '@/types'
 
+// Import action types
+import type {
+  ActionResponse,
+  ActionID,
+} from '@/types/actions'
+
 // Import event constants
 import {
   EventChannelGameEvent,
+  EventChannelAction,
   EventTypeStartGame,
   EventTypeVillageVote,
   EventTypeSeerAction,
   EventTypeWerewolfVote,
   EventTypeWitchAction,
+  EventTypeActionResponse,
 } from '@/types/events'
 
 export interface UseGameWebSocketOptions {
@@ -41,6 +49,7 @@ export interface UseGameWebSocketReturn extends Omit<UseWebSocketReturn, 'send'>
   sendSeerAction: (targetId: PlayerID) => void
   sendWerewolfVote: (targetId: PlayerID | null) => void
   sendWitchAction: (healTargetId?: PlayerID, poisonTargetId?: PlayerID) => void
+  sendActionResponse: (actionId: ActionID, response: ActionResponse) => void
   sendRaw: (message: string) => void
 }
 
@@ -107,6 +116,7 @@ export function useGameWebSocket(options: UseGameWebSocketOptions): UseGameWebSo
 
   /**
    * Send village vote during day phase
+   * @deprecated Use sendActionResponse with VillageVoteResponse instead (action system)
    */
   function sendVillageVote(targetId: PlayerID | null): void {
     const event: GameEvent<{ targetId: PlayerID | null }> = {
@@ -119,6 +129,7 @@ export function useGameWebSocket(options: UseGameWebSocketOptions): UseGameWebSo
 
   /**
    * Send seer action during night phase
+   * @deprecated Use sendActionResponse with SeerVisionResponse instead (action system)
    */
   function sendSeerAction(targetId: PlayerID): void {
     const event: GameEvent<{ targetId: PlayerID }> = {
@@ -131,6 +142,7 @@ export function useGameWebSocket(options: UseGameWebSocketOptions): UseGameWebSo
 
   /**
    * Send werewolf vote during night phase
+   * @deprecated Use sendActionResponse with WerewolfVoteResponse instead (action system)
    */
   function sendWerewolfVote(targetId: PlayerID | null): void {
     const event: GameEvent<{ targetId: PlayerID | null }> = {
@@ -143,6 +155,7 @@ export function useGameWebSocket(options: UseGameWebSocketOptions): UseGameWebSo
 
   /**
    * Send witch action during night phase
+   * @deprecated Use sendActionResponse with WitchPotionResponse instead (action system)
    */
   function sendWitchAction(healTargetId?: PlayerID, poisonTargetId?: PlayerID): void {
     const event: GameEvent<WitchActionData> = {
@@ -151,6 +164,23 @@ export function useGameWebSocket(options: UseGameWebSocketOptions): UseGameWebSo
       data: { healTargetId, poisonTargetId },
     }
     sendEvent(event)
+  }
+
+  /**
+   * Send action response (NEW ACTION SYSTEM)
+   * Responds to an action received via action_created event
+   * 
+   * @param actionId - The action ID to respond to
+   * @param response - The response payload (type-specific)
+   */
+  function sendActionResponse(actionId: ActionID, response: ActionResponse): void {
+    const event: GameEvent<{ actionId: ActionID; response: ActionResponse }> = {
+      channel: EventChannelAction,
+      type: EventTypeActionResponse,
+      data: { actionId, response },
+    }
+    sendEvent(event)
+    console.log(`[useGameWebSocket] Sent action response for ${actionId}`, response)
   }
 
   return {
@@ -164,10 +194,15 @@ export function useGameWebSocket(options: UseGameWebSocketOptions): UseGameWebSo
     
     // Game-specific send methods
     sendStartGame,
-    sendVillageVote,
-    sendSeerAction,
-    sendWerewolfVote,
-    sendWitchAction,
+    sendVillageVote, // @deprecated
+    sendSeerAction, // @deprecated
+    sendWerewolfVote, // @deprecated
+    sendWitchAction, // @deprecated
+    
+    // NEW: Action system
+    sendActionResponse,
+    
+    // Raw send
     sendRaw,
   }
 }
