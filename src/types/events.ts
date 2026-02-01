@@ -1,6 +1,11 @@
 import type { PlayerID } from "@/types/player"
 import type { GameID, GamePhase, GameStatus } from "@/types/game"
 import type { RoleType } from "@/types/roles"
+import type { 
+    ActionCreatedEventData, 
+    ActionExpiredEventData, 
+    ActionResponseEventData 
+} from "@/types/actions"
 
 // Strict type definitions for type safety
 export type EventType = 
@@ -27,9 +32,13 @@ export type EventType =
     | 'village_vote'
     | 'seer_action'
     | 'werewolf_vote'
-    | 'witch_action';
+    | 'witch_action'
+    // Action system events (NEW)
+    | 'action_created'
+    | 'action_response'
+    | 'action_expired';
 
-export type EventChannel = 'game_event' | 'conn_event' | 'settings_event' | 'timer_event';
+export type EventChannel = 'game_event' | 'conn_event' | 'settings_event' | 'timer_event' | 'action_event';
 
 export type ConnectionState = 'connected' | 'disconnected' | 'reconnecting' | 'inactive';
 
@@ -41,6 +50,7 @@ export const EventChannelGameEvent: EventChannel = "game_event";
 export const EventChannelConnexion: EventChannel = "conn_event";
 export const EventChannelSettings: EventChannel = "settings_event";
 export const EventChannelTimer: EventChannel = "timer_event";
+export const EventChannelAction: EventChannel = "action_event";
 
 // Event types - Server → Client (existing)
 export const EventTypeGameSettings: EventType = "settings";
@@ -67,12 +77,17 @@ export const EventTypeSeerReveal: EventType = "seer_reveal";
 export const EventTypeError: EventType = "error";
 export const EventTypeAck: EventType = "ack";
 
-// Event types - Client → Server (actions)
+// Event types - Client → Server (actions - DEPRECATED, use action system)
 export const EventTypeStartGame: EventType = "start_game";
 export const EventTypeVillageVote: EventType = "village_vote";
 export const EventTypeSeerAction: EventType = "seer_action";
 export const EventTypeWerewolfVote: EventType = "werewolf_vote";
 export const EventTypeWitchAction: EventType = "witch_action";
+
+// Event types - Action system (NEW)
+export const EventTypeActionCreated: EventType = "action_created";
+export const EventTypeActionResponse: EventType = "action_response";
+export const EventTypeActionExpired: EventType = "action_expired";
 
 // Generic Event interface
 export interface Event<T> {
@@ -318,3 +333,8 @@ export type WitchAction = Event<WitchActionData>;
 // Error and Ack events
 export type ErrorEvent = Event<ErrorEventData>;
 export type AckEvent = Event<AckEventData>;
+
+// Action system events (NEW)
+export type ActionCreatedEvent = Event<ActionCreatedEventData>;
+export type ActionResponseEvent = Event<ActionResponseEventData>;
+export type ActionExpiredEvent = Event<ActionExpiredEventData>;
