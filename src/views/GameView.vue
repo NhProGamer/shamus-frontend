@@ -21,6 +21,7 @@ import VotePanel from "@/components/game/VotePanel.vue"
 import NightActionModal from "@/components/game/NightActionModal.vue"
 import WinModal from "@/components/game/WinModal.vue"
 import ToastNotification from "@/components/game/ToastNotification.vue"
+import ActionModal from "@/components/game/actions/ActionModal.vue"
 
 // Stores
 import { useNotificationStore } from '@/stores/notificationStore'
@@ -53,6 +54,7 @@ import {
   EventChannelSettings,
   EventChannelTimer,
   EventChannelConnexion,
+  EventChannelAction,
   EventTypeChatMessage,
   EventTypeGameData,
   EventTypeGameSettings,
@@ -77,7 +79,15 @@ import {
   EventTypeDisconnection,
   EventTypeReconnection,
   EventTypeInactive,
+  EventTypeActionCreated,
+  EventTypeActionExpired,
 } from "@/types/events"
+
+import type {
+  ActionCreatedEventData,
+  ActionExpiredEventData,
+  ActionResponse,
+} from "@/types/actions"
 
 // --- CONSTANTES ---
 const MAX_MSG_LENGTH = 500
@@ -134,6 +144,8 @@ const {
   rolesMatchPlayers,
   isMyTurn,
   isAlive,
+  currentAction,
+  hasActiveAction,
 } = storeToRefs(gameStore)
 
 // --- CONFIGURATION WEBSOCKET (Approche Impérative) ---
@@ -520,6 +532,36 @@ const sendWitchAction = (healTargetId: PlayerID | undefined, poisonTargetId: Pla
 }
 
 // ========================
+// NEW: ACTION SYSTEM HANDLERS
+// ========================
+
+/** Send action response (NEW action system) */
+const handleActionSubmit = (actionId: string, response: ActionResponse) => {
+  console.log('[GameView] Submitting action response:', actionId, response)
+  
+  const event: Event<{ actionId: string; response: ActionResponse }> = {
+    channel: EventChannelAction,
+    type: 'action_response' as any,
+    data: { actionId, response }
+  }
+  
+  try {
+    send(JSON.stringify(event))
+    // Mark action as completed locally
+    gameStore.markActionCompleted(actionId, response)
+  } catch (e) {
+    console.error('Erreur envoi action_response:', e)
+    notificationStore.showError('Erreur lors de l\'envoi de votre action')
+  }
+}
+
+/** Close action modal */
+const handleActionModalClose = () => {
+  // User can close the modal, but action remains active until timeout/response
+  console.log('[GameView] Action modal closed by user')
+}
+
+// ========================
 // MESSAGE DISPATCHER
 // ========================
 
@@ -587,6 +629,7 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         gameStore.handleSeerReveal(event.data as SeerRevealEventData)
         break
       case EventTypeTurn:
+        console.log('[GameView] Turn event received from WS:', event.data)
         gameStore.handleTurnEvent(event.data as TurnEventData)
         break
       case EventTypeError:
@@ -619,6 +662,19 @@ const handleIncomingMessage = (message: WebSocketMessage) => {
         break
       default:
         console.log("Event Timer non géré:", event.type, event.data)
+    }
+  } else if (event.channel === EventChannelAction) {
+    // NEW: Action system events
+    switch (event.type) {
+      case EventTypeActionCreated:
+        gameStore.handleActionCreated(event.data as ActionCreatedEventData)
+        break
+      case EventTypeActionExpired:
+        gameStore.handleActionExpired(event.data as ActionExpiredEventData)
+        notificationStore.showWarning('Le temps imparti pour votre action est écoulé')
+        break
+      default:
+        console.log("Event Action non géré:", event.type, event.data)
     }
   } else if (event.channel === EventChannelConnexion) {
     switch (event.type) {
@@ -1183,12 +1239,21 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- NIGHT ACTION MODAL -->
+    <!-- NIGHT ACTION MODAL (OLD SYSTEM - Will be replaced by ActionModal) -->
     <NightActionModal 
       :streamer-mode="streamerMode"
       @seer-action="sendSeerAction"
       @werewolf-vote="sendWerewolfVote"
       @witch-action="sendWitchAction"
+    />
+
+    <!-- ACTION MODAL (NEW SYSTEM) -->
+    <ActionModal
+      :action="currentAction"
+      :game-data="game"
+      :visible="hasActiveAction"
+      @submit="handleActionSubmit"
+      @close="handleActionModalClose"
     />
 
     <!-- WIN MODAL -->
