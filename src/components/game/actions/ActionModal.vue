@@ -152,10 +152,10 @@ function handleClose() {
     </div>
 
     <!-- Action Component (Dynamic) -->
-    <div v-if="action && gameData && actionComponent" class="action-content">
+    <div v-if="action && gameData && actionComponent" class="action-content mt-4">
       <component
         :is="actionComponent"
-        :payload="action.payload"
+        :payload="action.payload as any"
         :game-data="gameData"
         @submit="handleSubmit"
         @cancel="handleCancel"
@@ -171,29 +171,3 @@ function handleClose() {
   </PixelModal>
 </template>
 
-<style scoped>
-.timer-display {
-  @apply flex items-center justify-center gap-2 mb-4 p-3 rounded;
-  @apply bg-gray-800 border border-gray-700;
-}
-
-.timer-display.time-warning {
-  @apply bg-red-900/30 border-red-800 animate-pulse;
-}
-
-.timer-icon {
-  @apply text-xl;
-}
-
-.timer-value {
-  @apply text-lg font-bold font-mono;
-}
-
-.action-content {
-  @apply mt-4;
-}
-
-.no-action {
-  @apply py-12;
-}
-</style>

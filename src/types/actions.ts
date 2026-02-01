@@ -3,7 +3,7 @@
  * Maps to backend: internal/domain/entities/action.go and actions/
  */
 
-import type { PlayerID } from './game'
+import type { PlayerID } from './player'
 
 // ============================================================================
 // Core Action Types

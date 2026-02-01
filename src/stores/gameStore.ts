@@ -197,7 +197,7 @@ export const useGameStore = defineStore('game', () => {
     // Get the current action (first pending action, if any)
     const currentAction = computed((): ActionState | null => {
         const active = activeActions.value
-        return active.length > 0 ? active[0] : null
+        return active[0] ?? null
     })
 
     // ========================

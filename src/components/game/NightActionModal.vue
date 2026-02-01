@@ -47,6 +47,26 @@ watch(lastAck, (ack) => {
     }
 })
 
+// DEBUG: Watch nightTurn changes
+watch(nightTurn, (newTurn, oldTurn) => {
+    console.log('[NightActionModal] nightTurn changed:', {
+        old: oldTurn,
+        new: newTurn,
+        roleType: newTurn?.roleType,
+        targetPlayerId: newTurn?.targetPlayerId,
+        canHeal: newTurn?.canHeal,
+        canPoison: newTurn?.canPoison
+    })
+    
+    if (newTurn?.roleType === 'witch') {
+        console.log('[NightActionModal] WITCH TURN - Details:', {
+            targetPlayerId: newTurn.targetPlayerId,
+            livingPlayers: livingPlayers.value.map(p => ({ id: p.id, username: p.username })),
+            werewolfVictimComputed: werewolfVictim.value
+        })
+    }
+}, { immediate: true, deep: true })
+
 // Modal visibility
 const showModal = computed(() => isMyTurn.value || seerReveal.value !== null)
 
@@ -117,8 +137,25 @@ function handleWerewolfSkip() {
 
 // === WITCH ACTIONS ===
 const werewolfVictim = computed(() => {
-    if (!nightTurn.value?.targetPlayerId) return null
-    return livingPlayers.value.find(p => p.id === nightTurn.value?.targetPlayerId) || null
+    console.log('[werewolfVictim] Computing...', {
+        targetPlayerId: nightTurn.value?.targetPlayerId,
+        hasTargetPlayerId: !!nightTurn.value?.targetPlayerId,
+        livingPlayersCount: livingPlayers.value.length
+    })
+    
+    if (!nightTurn.value?.targetPlayerId) {
+        console.log('[werewolfVictim] No targetPlayerId, returning null')
+        return null
+    }
+    
+    const victim = livingPlayers.value.find(p => p.id === nightTurn.value?.targetPlayerId)
+    console.log('[werewolfVictim] Search result:', {
+        searchingFor: nightTurn.value.targetPlayerId,
+        found: victim,
+        allPlayerIds: livingPlayers.value.map(p => p.id)
+    })
+    
+    return victim || null
 })
 
 const canHeal = computed(() => nightTurn.value?.canHeal ?? false)
